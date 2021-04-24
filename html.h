@@ -1,0 +1,387 @@
+#ifndef __AR4BR_HTML_H
+
+const char* htmlHeader =
+  "<!DOCTYPE html><html lang=\"en\"><head><meta charset=\"UTF-8\">"
+  "<meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\">"
+  "<meta http-equiv=\"X-UA-Compatible\" content=\"ie=edge\">"
+  "<title>Aranet4-ESP32 Bridge</title>"
+  "<style>*{margin:0 auto;padding:0;font-family:Helvetica,sans-serif}"
+  "#hdr{background:#fff;color:#333333;font-size:20px;padding:16px 24px}"
+  "#notes,#content{padding:16px 24px}"
+  "#hdrr{float:right;}"
+  "body{background:#f0f0f0;}"
+  "h1{font-size:1.2em;font-weight:bold;padding:4px 0;border-bottom:solid 1px #aaa;margin:16px 0 8px 0}"
+  "input:not([type='checkbox']){width:300px;height:20px;font-size:15px;}"
+  "input{margin-bottom:8px;}"
+  ".bt{margin-left:8px;font-size:0.6em;color:#aaa;}"
+  ".imgbtn{padding:2px 4px;}"
+  ".content{margin: 0 auto; max-width: 800px;}"
+  "table,tr,th,td{border-collapse:collapse;border:solid 1px #bbb;margin: 16px 0;}td{padding:4px}"
+  ".card{margin: 24px;background: #fff;font-color:#333;}"
+  ".cardtop{height: 4px;background: #aaa;}"
+  ".cardtop.en{background: #079851;}"
+  ".cardbody{padding: 16px 24px;font-size: 18px;line-height: 24px;}"
+  ".cardimg{vertical-align: middle;padding: 0 6px;}"
+  ".cardtitle{vertical-align: middle;font-size:22px;padding: 16px 0}"
+  ".cardfl{flex: 1;text-align: center;}"
+  ".cardmsg{margin-top:16px;}"
+  ".clickable:hover{cursor:pointer;}"
+  ".co2{text-align: center;margin: 36px;}"
+  ".co2>b{font-size: 64px;}"
+  ".co2-none .co2-txt{color: #aaa}"
+  ".co2-none>.cardtop{background: #aaa;}"
+  ".co2-ok .co2-txt{color: #00ac00}"
+  ".co2-ok>.cardtop{background: #00ac00;}"
+  ".co2-warn .co2-txt{color: #fdee1f}"
+  ".co2-warn>.cardtop{background: #fdee1f;}"
+  ".co2-alert .co2-txt{color: #f32a1b}"
+  ".co2-alert>.cardtop{background: #f32a1b;}"
+  "</style>"
+  "<script>"
+  "function page(url) { window.location.href = url; }"
+  "</script>"
+  "</head>"
+  "<body>"
+  "<div id=\"hdr\"><div class=\"content\">"
+  "Aranet<b>4</b> - ESP32 Bridge"
+  "<small class=\"bt\">"
+  " " VERSION_CODE " "
+  "</small>"
+  "<div id=\"hdrr\">" // start right
+  "<a href=\"/\" class=\"imgbtn\"><img src=\"/img/home.png\"></a>"
+  "<a href=\"/settings\" class=\"imgbtn\"><img src=\"/img/settings.png\"></a>"
+  "</div>" // end right
+  "</div></div>"
+  "<div class=\"content\">";
+
+const char* htmlFooter = "</div></body></html>";
+
+const char* cfgScript =
+  "<script>"
+  "function saveConfig() {"
+  "document.getElementById(\"cfg\").submit();"
+  "};"
+  "function toggleStaticCfg(en) {"
+  "let div = document.getElementById(\"ipcfg\");"
+  "div.style.display = en ? \"block\" : \"none\";"
+  "}"
+  "let staticIpCb = document.getElementsByName(\"static_ip\")[0];"
+  "staticIpCb.onchange = function(e) {"
+  "toggleStaticCfg(e.target.checked);"
+  "};"
+  "toggleStaticCfg(staticIpCb.checked);"
+  "</script>";
+
+const char* scanResultsHtml = 
+  "<table id=\"results\">"
+  "<tr><th>Name</th><th>RSSI</th><th>Address</th><th></th></tr>"
+  "</table>";
+
+const char* scanResultsScript = 
+  "<script>"
+  "var failed = 0;"
+
+  "let table = document.getElementById(\"results\");"
+  "let status = document.getElementById(\"status\");"
+
+  "function fetchResults() {"
+    "fetch(\"/scanresults\")"
+        ".then(response => response.text()) "
+        ".then((dataStr) => {"
+            "let rows = table.rows;"
+            "var i = rows.length;"
+            "while (--i) {"
+                "rows[i].parentNode.removeChild(rows[i]);"
+            "}"
+            "let lines = dataStr.split(\"\\n\");"
+            "let running = lines[0] == \"running\";"
+            "status.innerHTML = lines[0];"
+            "lines.shift();"
+            "for (let line of lines) {"
+                "let parts = line.split(\";\");"
+                "let row = table.insertRow();"
+                "row.insertCell(0).innerHTML = parts[3];"
+                "row.insertCell(1).innerHTML = parts[2];"
+                "row.insertCell(2).innerHTML = parts[1];"
+                "let txt4 = (parts[4] == 1) ? 'Paired' : running ? 'scanning...' : '<a href=\"#\" onclick=\"pairDevice(' + parts[0] + ');\">Pair device</a>';"
+                "row.insertCell(3).innerHTML = txt4;"
+            "}"
+            "if (running) {"
+                "setTimeout(fetchResults, 1000);"
+            "}"
+        "})"
+        ".catch(function(err) {"
+            "if (failed++ < 2) {"
+                "console.log('fetch failed. retry.');"
+                "setTimeout(fetchResults, 1000);"
+            "} else {"
+                "status.innerHTML = \"stopped (conn reset)\";"
+            "}"
+        "});"
+  "}"
+
+  "function pairDevice(deviceid) {"
+      "fetch('/pair', {method: 'POST', headers: {'Content-Type': 'application/x-www-form-urlencoded'}, body: \"deviceid=\" + deviceid})"
+      ".then(response => response.text())"
+      ".then((dataStr) => {"
+          "if (dataStr != 'OK') {"
+              "alert(dataStr);"
+              "return;"
+          "}"
+          "let pin = prompt(\"Enter PIN\");"
+          "if (pin > 0) {"
+              "fetch('/pair', {method: 'POST', headers: {'Content-Type': 'application/x-www-form-urlencoded'}, body: \"deviceid=\" + deviceid + \"&pin=\" + pin})"
+              ".then(response => response.text())"
+              ".then((dataStr) => {"
+                  "alert(dataStr);"
+                  "fetchResults();"
+              "});"
+          "}"
+      "});"
+  "}"
+
+  "setTimeout(fetchResults, 100);"
+  
+  "</script>"
+  ;
+
+String printHtmlLabel(char *name, char* title) {
+    char tmp[128];
+    sprintf(tmp, "<label for=\"%s\">%s</label>",name,title);
+    return String(tmp);
+}
+
+String printHtmlTextInput(char *name, char* title, char* value, uint8_t maxlen) {
+  char tmp[256];
+  sprintf(tmp, "<br><input type=\"text\" name=\"%s\" maxlength=\"%i\" value=\"%s\"></br>", name, maxlen, value);
+  return printHtmlLabel(name, title) + String(tmp);
+}
+
+String printHtmlNumberInput(char *name, char* title, uint16_t value, uint32_t max) {
+  char tmp[256];
+  sprintf(tmp, "<br><input type=\"number\" name=\"%s\" max=\"%i\" value=\"%i\"></br>", name, max, value);
+  return printHtmlLabel(name, title) + String(tmp);
+}
+
+String printHtmlCheckboxInput(char *name, char* title, uint32_t value) {
+  char tmp[256];
+  sprintf(tmp, "<input type=\"checkbox\" name=\"%s\" %s>", name, value ? "checked" : "");
+  return String(tmp) + printHtmlLabel(name, title) + String("<br>");
+}
+
+String printCard(String title, String body, String cardimg = "", String fn = "", uint8_t color = 0) {
+  String card = "<div ";
+  
+  if (fn.length() > 0) {
+    card += "class=\"card clickable\" onclick=\"" + fn + "\">";
+  } else {
+    card += "class=\"card\">";
+  }
+
+  String klass = "";
+  if (color == 1) {
+    klass += " en";
+  }
+
+  card += "<div class=\"cardtop" + klass+ "\"></div><div class=\"cardbody\"><div>";
+
+  if (cardimg.length() > 0) {
+    card += "<img src=\"" + cardimg + "\" class=\"cardimg\">";
+  }
+
+  card += "<span class=\"cardtitle\">" + title + "</span></div>";
+  if (body.length() > 0) {
+    card += "<div class=\"cardmsg\">" + body + "</div>";
+  }
+  card += "</div></div>";
+
+  return card;
+}
+
+String printAranetCard(AranetDeviceStatus* status, int id) {
+  AranetDevice* d = status->device;
+
+  String klass = "co2-none";
+  if (status->data.co2 == 0) {
+    klass = "co2-none";
+  }else if (status->data.co2 < 1000) {
+    klass = "co2-ok";
+  } else if (status->data.co2 < 1400) {
+    klass = "co2-warn";
+  } else {
+    klass = "co2-alert";
+  }
+  
+  String card = "<div class=\"card " + klass + "\" data-id=\"" + String(id) + "\">";
+
+  char buf0[6];
+  char buf1[6];
+  char buf2[6];
+  char buf3[6];
+  
+  sprintf(buf0, "%i", status->data.co2);
+  sprintf(buf1, "%.1f", status->data.temperature / 20.0);
+  sprintf(buf2, "%i", status->data.humidity);
+  sprintf(buf3, "%i", status->data.pressure);
+  sprintf(buf3, "%i", status->data.pressure);
+  sprintf(buf3, "%i", status->data.pressure);
+
+  String batimg = "";
+  
+  if (status->data.battery > 90) { batimg = "100"; }
+  else if (status->data.battery > 80) { batimg = "90"; }
+  else if (status->data.battery > 70) { batimg = "80"; }
+  else if (status->data.battery > 60) { batimg = "70"; }
+  else if (status->data.battery > 50) { batimg = "60"; }
+  else if (status->data.battery > 40) { batimg = "50"; }
+  else if (status->data.battery > 30) { batimg = "40"; }
+  else if (status->data.battery > 20) { batimg = "30"; }
+  else if (status->data.battery > 10) { batimg = "20"; }
+  else { batimg = "10"; }
+  
+  card += "<div class=\"cardtop " + klass + "\"></div>";
+  card += "<div class=\"cardbody\">";
+  card +=   "<div>";
+  card +=     "<img src=\"/img/bluetooth.png\" class=\"cardimg\">";
+  card +=     "<span class=\"cardtitle\">" + String(d->name) + "</span>";
+  card +=       "<span style=\"float:right;\">";
+  card +=         "<img class=\"batt-val\" src=\"/img/battery_" + batimg + ".png\" class=\"cardimg\">";
+  //card +=         "<img src=\"/img/graph.png\" class=\"cardimg\">";
+  //card +=         "<img src=\"/img/settings_dash.png\" class=\"cardimg\">";
+  card +=       "</span>";
+  card +=     "</div>";
+  card +=     "<div class=\"co2\">";
+  card +=       "<img style=\"margin-right: 16px; height:32px;\" src=\"/img/co2.png\"><b class=\"co2-val co2-txt\"\">" + String(buf0) + "</b><span class=\"co2-txt\">ppm</span>";
+  card +=     "</div>";
+  card +=     "<div style=\"display: flex;\">";
+  card +=       "<div class=\"cardfl\"><img src=\"/img/temp.png\"><br><b class=\"temp-val\" style=\"font-size: 28px;\">" + String(buf1) + "</b>°C</div>";
+  card +=       "<div class=\"cardfl\"><img src=\"/img/humidity.png\"><br><b class=\"humi-val\" style=\"font-size: 28px;\">" + String(buf2) + "</b>%</div>";
+  card +=       "<div class=\"cardfl\"><img src=\"/img/pressure.png\"><br><b class=\"pres-val\" style=\"font-size: 28px;\">" + String(buf3) + "</b>hPa</div>";
+  card +=     "</div>";
+  card +=   "</div>";
+  card += "</div>";
+
+  return card;
+}
+
+String printHtmlIndex(AranetDeviceStatus* devices, int count) {
+  String page = String(htmlHeader);
+  Serial.print("Task1 running on core ");
+  Serial.println(xPortGetCoreID());
+
+  char buf[24];
+  String dev = String("");
+  for (uint8_t i=0; i < count; i++) {
+    bool ok = false;
+    for (uint8_t j=0; j < 6; j++) {
+      if (devices[i].device->addr[j] != 0) {
+        ok = true;
+        break;
+      }
+    }
+
+    if (!ok) {
+      continue;
+    }
+    
+    mac2str(devices[i].device->addr, buf, false);
+    dev += String(devices[i].device->name);
+    dev += " <small>" + String(buf) + "</small><br>";
+    sprintf(buf, "CO2: %i ppm<br>", devices[i].data.co2);
+    dev += String(buf);
+
+    page += printAranetCard(&devices[i], i);
+  }
+
+  page += "<div class=\"card clickable\" onclick=\"page('scan')\">";
+  page +=   "<div class=\"cardtop\"></div>";
+  page +=   "<div class=\"cardbody\">";
+  page +=     "<img src=\"/img/plus.png\" class=\"cardimg\"> <span class=\"cardimg\">Add new device</span>";
+  page +=   "</div>";
+  page += "</div>";
+
+  page += printCard("Paired devices", dev);
+
+  page += String(htmlFooter);
+  return page;
+}
+
+String printHtmlConfig(NodeConfig* nodeCfg, bool updated = false) {
+  String page = String(htmlHeader);
+
+  page += "<form id=\"cfg\" method=\"post\">";
+
+  char ipAddr[16];
+  char netmask[16];
+  char gateway[16];
+  char dns[16];
+
+  ip2str(nodeCfg->ip_addr, ipAddr);
+  ip2str(nodeCfg->netmask, netmask);
+  ip2str(nodeCfg->gateway, gateway);
+  ip2str(nodeCfg->dns, dns);
+
+  if (updated) {
+    page += printCard(
+      "Configuration updated", "",
+      "/img/ok.png",
+      "",
+      1
+    );
+  }
+
+  page += printCard("System", printHtmlTextInput("name", "Device Name", nodeCfg->name, 32));
+  page += printCard("Connectivity", printHtmlTextInput("ssid", "Wi-Fi SSID", nodeCfg->ssid, 32)
+                                  + printHtmlTextInput("password", "Wi-Fi Password", nodeCfg->password, 63)
+                                  + printHtmlCheckboxInput("static_ip", "Set static IP address", nodeCfg->extras & CFG_EXTRA_BIT_STATIC_IP)
+                                  + "<div id=\"ipcfg\">"
+                                  + printHtmlTextInput("ip_addr", "IP address", ipAddr, 15)
+                                  + printHtmlTextInput("netmask", "Network mask", netmask, 15)
+                                  + printHtmlTextInput("gateway", "Gateway", gateway, 15)
+                                  + printHtmlTextInput("dns", "DNS", dns, 15)
+                                  + "</div>");
+
+  page += printCard("Influx DB", printHtmlTextInput("url", "Url", nodeCfg->url, 128)
+                               + printHtmlTextInput("org", "Organisation", nodeCfg->organisation, 16)
+                               + printHtmlTextInput("token", "Token", nodeCfg->token, 128)
+                               + printHtmlTextInput("bucket", "Bucket/Database", nodeCfg->bucket, 32)
+                               + printHtmlCheckboxInput("dbver", "InfluxDB v2", nodeCfg->dbver == 2));
+
+  page += printCard(
+    "Save", "",
+    "/img/ok.png",
+    "saveConfig()"
+  );
+  
+  page += printCard(
+    "Restart", "",
+    "/img/restart.png",
+    "page('/restart')"
+  );
+
+  page += printCard(
+    "Remove bonded devices", "",
+    "/img/restart.png",
+    "page('/clrbnd')"
+  );
+
+  page += String("</form>");
+  page += String(cfgScript);
+  page += String(htmlFooter);
+
+  return page;
+}
+
+String printScanPage() {
+  String page = String(htmlHeader);
+  page += printCard(
+    "<b>Scan status: </b><span id=\"status\">unknown</span>",
+    scanResultsHtml
+  );
+  page += String(scanResultsScript);
+  page += String(htmlFooter);
+
+  return page;
+}
+
+#endif
