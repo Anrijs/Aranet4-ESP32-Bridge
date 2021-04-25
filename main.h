@@ -227,7 +227,7 @@ String printData() {
         page += String(ar4status[i].device->name);
         page += ";" + String(buf) + ";";
 
-        sprintf(buf, "%i;%.1f;%.1f;%i;%i;%i,%i,%i\n", 
+        sprintf(buf, "%i;%.1f;%.1f;%i;%i;%i;%i;%i\n",
             ar4status[i].data.co2,
             ar4status[i].data.temperature / 20.0,
             ar4status[i].data.pressure / 10.0,
