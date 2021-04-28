@@ -616,6 +616,7 @@ bool startWebserver() {
     // Image resources
     // server static content from images folder with 10 minute cache
     server.serveStatic("/img/", SPIFFS, "/img/", "max-age=86400"); // 1 day cache
+    server.serveStatic("/js/", SPIFFS, "/js/", "max-age=86400"); // 1 day cache
 
     server.onNotFound(handleNotFound);
     server.begin();

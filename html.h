@@ -298,6 +298,8 @@ String printHtmlIndex(AranetDeviceStatus* devices, int count) {
   page +=   "</div>";
   page += "</div>";
 
+  page += String("<script src=\"js/index.js\"></script>");
+
   page += String(htmlFooter);
   return page;
 }
