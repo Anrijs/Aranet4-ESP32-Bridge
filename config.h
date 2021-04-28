@@ -6,8 +6,9 @@
 // Config defaults
 #define CFG_DEF_NAME "Aranet4-ESP-bridge"
 #define CFG_DEF_URL "http://10.0.1.100:8086"
+#define CFG_DEF_NTP "time.nist.gov"
 
-#define CFG_VER 1
+#define CFG_VER 2
 
 #define CFG_BT_SCAN_DURATION 5 // seconds
 

@@ -28,32 +28,43 @@ const char compile_date[] = __DATE__ " " __TIME__;
 // ---------------------------------------------------
 WebServer server(80);
 
-MyAranet4Callbacks* ar4callbacks = new MyAranet4Callbacks();
+MyAranet4Callbacks ar4callbacks;
 NodeConfig nodeCfg;
 AranetDeviceConfig ar4devices;
 AranetDeviceStatus ar4status[CFG_MAX_DEVICES];
 
+Aranet4 ar4(&ar4callbacks);
+
 // RTOS
 TaskHandle_t BtScanTask;
 TaskHandle_t WiFiTask;
+TaskHandle_t NtpSyncTask;
+
+bool wifiTaskRunning = false;
 
 // Blue
-BtScanAdvertisedDeviceCallbacks* scanCallbacks = new BtScanAdvertisedDeviceCallbacks();
+NimBLEScan *pScan = NimBLEDevice::getScan();
+
+bool isAp = true;
+long wifiConnectedAt = 0;
+long scanBlockTimeout = 0;
 
 // ---------------------------------------------------
 //                 Function declarations
 // ---------------------------------------------------
 int configLoad();
-void configSave();
-void configFix();
+void configSave(bool fix);
+bool configFix();
 bool getBootWiFiMode();
-bool startWebserver(bool ap);
+bool startWebserver();
 bool isManualIp();
 void task_sleep(uint32_t ms);
 void runBtScan();
+void ntpSync();
 
 void BtScanTaskCode(void* pvParameters);
 void WiFiTaskCode(void* pvParameters);
+void NtpSyncTaskCode(void* pvParameters);
 
 // ---------------------------------------------------
 //                 Function definitions
@@ -61,6 +72,10 @@ void WiFiTaskCode(void* pvParameters);
 
 bool isManualIp() {
     return (nodeCfg.extras & CFG_EXTRA_BIT_STATIC_IP) != 0;
+}
+
+bool isScanOpen() {
+    return (scanBlockTimeout > millis());
 }
 
 void wipe(uint32_t start = 0) {
@@ -115,10 +130,13 @@ void saveDevice(uint8_t* addr, String name) {
    @brief Default configuration + version migration
    @return 1 on success or 0 on failure
 */
-void configFix() {
+bool configFix() {
+  bool updatecfg = nodeCfg.version != CFG_VER;
+
     // Load defaults
-    if (nodeCfg.name[0] == 0) strcpy(nodeCfg.name, CFG_DEF_NAME);
-    if (nodeCfg.url[0] == 0) strcpy(nodeCfg.url, CFG_DEF_URL);
+    if (nodeCfg.name[0] == 0) { strcpy(nodeCfg.name, CFG_DEF_NAME); updatecfg = true; }
+    if (nodeCfg.url[0] == 0) { strcpy(nodeCfg.url, CFG_DEF_URL); updatecfg = true; }
+    if (nodeCfg.ntpserver[0] == 0) { strcpy(nodeCfg.ntpserver, CFG_DEF_NTP); updatecfg = true; }
 
     // version migration
     if (nodeCfg.version == 0) {
@@ -129,8 +147,14 @@ void configFix() {
         nodeCfg.dns = 0;
     }
 
+    if (nodeCfg.version < 2) {
+        strcpy(nodeCfg.ntpserver, CFG_DEF_NTP);
+    }
+
     // set version
     nodeCfg.version = CFG_VER;
+
+    return updatecfg;
 }
 
 /*
@@ -159,25 +183,26 @@ int configLoad() {
         return configLoad();
     }
 
-    configFix();
+    if (configFix()) configSave(false);
+
     return 1;
 }
 
 /*
    Saves configuration to EEPROM
 */
-void configSave() {
-    configFix();
+void configSave(bool fix = true) {
+    if (fix) configFix();
     for (uint16_t j = 0; j < sizeof(NodeConfig); j++) {
         char b = ((char *) &nodeCfg)[j];
         EEPROM.write(j, b);
     }
     EEPROM.commit();
+    ntpSync();
 }
 
 bool getBootWiFiMode() {
     bool isAp = false;
-
     if (nodeCfg.ssid[0] == 0) return true;
 
     long timeout = millis() + 3000;
@@ -242,16 +267,61 @@ String printData() {
     return page;
 }
 
+String printScannedDevices() {
+    NimBLEScanResults results = pScan->getResults();
+    String page = pScan->isScanning() ? String("running") : String("stopped");    
+    
+    for (int i = 0; i < results.getCount(); i++) {
+        NimBLEAdvertisedDevice adv = results.getDevice(i);
+
+        if (adv.getName().find("Aranet") == std::string::npos) {
+            continue;
+        }
+        
+        page += "\n";
+        page += String(i);
+        page += ";";
+        page += String(adv.getAddress().toString().c_str());
+        page += ";";
+        page += String(adv.getRSSI());
+        page += ";";
+        page += String(adv.getName().c_str());
+        page += ";";
+
+        int count = ar4devices.size;
+        bool paired = false;
+        for (int j=0; j<count; j++) {
+            AranetDeviceStatus* s = s = &ar4status[j];
+            AranetDevice* d = d = s->device;
+
+            uint8_t rev[6];
+            rev[0] = adv.getAddress().getNative()[5];
+            rev[1] = adv.getAddress().getNative()[4];
+            rev[2] = adv.getAddress().getNative()[3];
+            rev[3] = adv.getAddress().getNative()[2];
+            rev[4] = adv.getAddress().getNative()[1];
+            rev[5] = adv.getAddress().getNative()[0];
+
+            if (memcmp(rev, d->addr, 6) == 0) {
+                paired = true;
+                break;
+            }
+        }
+        page += paired ? "1" : "0";
+    }
+  return page;
+}
+
 void handleNotFound() {
     server.send(404, "text/html", "404");
 }
 
-bool startWebserver(bool ap) {
+bool setupWiFi() {
     if (WiFi.status() == WL_CONNECTED) {
         return true;
     }
 
-    if (ap) {
+    if (isAp) {
         Serial.printf("Starting AP: %s : %s\n", ssid, password);
         WiFi.mode(WIFI_AP_STA);
         WiFi.softAP(ssid, password);
@@ -281,6 +351,49 @@ bool startWebserver(bool ap) {
         Serial.println();
     }
 
+    wifiConnectedAt = millis();
+    return true;
+}
+
+void startWebserverTask() {
+    if (wifiTaskRunning) {
+        vTaskDelete(WiFiTask);
+        wifiTaskRunning = false;
+    }
+    xTaskCreatePinnedToCore(
+        WiFiTaskCode,   /* Task function. */
+        "WiFiTask",     /* name of task. */
+        10000,            /* Stack size of task */
+        NULL,             /* parameter of the task */
+        1,                /* priority of the task */
+        &WiFiTask,      /* Task handle to keep track of created task */
+        0);          /* pin task to core 0 */
+}
+
+bool setupWifiAndWebserver(bool restart = false) {
+      if (restart) {
+          WiFi.disconnect();
+          server.stop();
+      }
+
+      if (setupWiFi()) {
+          Serial.println("WiFi started");
+      } else {
+          Serial.println("Failed to start WiFi");
+          return false;
+      }
+      
+      if (startWebserver()) {
+          Serial.println("Web server started");
+      } else {
+          Serial.println("Failed to start WiFi");
+          return false;
+      }
+
+      return true;      
+}
+
+bool startWebserver() {
     // setup webserver handles
     server.on("/", HTTP_GET, []() {
         if (!server.authenticate(www_username, password)) {
@@ -307,7 +420,10 @@ bool startWebserver(bool ap) {
         if (server.hasArg("name"))     {
             server.arg("name").toCharArray(nodeCfg.name, sizeof(nodeCfg.name) - 1);
         }
-
+        if (server.hasArg("ntpserver"))      {
+            server.arg("ntpserver").toCharArray(nodeCfg.ntpserver, sizeof(nodeCfg.ntpserver) - 1);
+        }
+        
         // Network
         if (server.hasArg("ssid"))     {
             server.arg("ssid").toCharArray(nodeCfg.ssid, sizeof(nodeCfg.ssid) - 1);
@@ -376,11 +492,6 @@ bool startWebserver(bool ap) {
 
         runBtScan();
 
-        long timeout = millis() + 1000;
-        while (!scanCallbacks->isRunning() && timeout < millis()) {
-            task_sleep(5);
-        }
-
         server.send(200, "text/html", printScanPage());
     });
 
@@ -388,7 +499,8 @@ bool startWebserver(bool ap) {
         if (!server.authenticate(www_username, password)) {
             return server.requestAuthentication();
         }
-        server.send(200, "text/plain", scanCallbacks->printDevices());
+        scanBlockTimeout = millis() + 5000;
+        server.send(200, "text/plain", printScannedDevices());
     });
 
     server.on("/pair", HTTP_POST, []() {
@@ -397,8 +509,8 @@ bool startWebserver(bool ap) {
         }
 
         // Abort task
-        if (scanCallbacks->isRunning()) {
-            scanCallbacks->abort();
+        if (pScan->isScanning()) {
+            pScan->stop();
         }
 
         uint32_t pin = -1;
@@ -413,43 +525,69 @@ bool startWebserver(bool ap) {
             deviceid = server.arg("deviceid").toInt();
         }
 
-        if (deviceid != -1 && deviceid < scanCallbacks->getDeviceCount()) {
+        if (deviceid != -1 && deviceid < pScan->getResults().getCount()) {
             Serial.println("Begin pair");
-            uint8_t addr[ESP_BD_ADDR_LEN];
-            scanCallbacks->getAddress(deviceid, addr);
+            NimBLEAdvertisedDevice adv = pScan->getResults().getDevice(deviceid);
 
-            if (Aranet4::isPaired(addr)) {
-                Serial.printf("Already paired... %02X:%02X:%02X...\n", addr[0], addr[1], addr[2]);
-                String ar4name = "FIXME1"; //ar4.getName();
-                String result = "Connected to " + ar4name;
-                Serial.println(result);
-                saveDevice(addr, ar4name);
+            uint8_t addr[6];
+            addr[0] = adv.getAddress().getNative()[5];
+            addr[1] = adv.getAddress().getNative()[4];
+            addr[2] = adv.getAddress().getNative()[3];
+            addr[3] = adv.getAddress().getNative()[2];
+            addr[4] = adv.getAddress().getNative()[1];
+            addr[5] = adv.getAddress().getNative()[0];
+
+            if (false /* FIXME Aranet4::isPaired(addr) */) {
+                //Serial.printf("Already paired... %02X:%02X:%02X...\n", addr[0], addr[1], addr[2]);
+                //String ar4name = ar4.getName();
+                //String result = "Connected to " + ar4name;
+                //Serial.println(result);
+                //saveDevice(addr, ar4name);
                 //ar4.disconnect();
-                server.send(200, "text/html", result);
+                //server.send(200, "text/html", result);
+                server.send(200, "text/html", "Already paired.");
             } else {
                 if (pin != -1) {
                     Serial.println("recvd PIN");
-                    ar4callbacks->providePin(pin);
-                    String ar4name = "FIXME2";//ar4.getName();
-                    String result = "Connected to " + ar4name;
+                    String result = "Failed";
+                    ar4callbacks.providePin(pin);
+                    
+                    String ar4name = ar4.getName();
+                    if (ar4name.length() > 1) {
+                        saveDevice(addr, ar4name);
+                        result = "Connected to " + ar4name;
+                    } else {
+                        result = "Failed to get name";
+                        ar4name = ar4.getName();
+                        Serial.println(ar4name);
+                        ar4name = ar4.getSwVersion();
+                        Serial.println(ar4name);
+                        ar4name = ar4.getFwVersion();
+                        Serial.println(ar4name);
+                        ar4name = ar4.getHwVersion();
+                        Serial.println(ar4name);
+                        AranetData meas = ar4.getCurrentReadings();
+                        Serial.printf("MEAS:\n  %i ppm\n", meas.co2);
+                    }
+                    
+                    ar4.disconnect();
                     Serial.println(result);
-
-                    saveDevice(addr, ar4name);
-
-                    //ar4.disconnect();
                     server.send(200, "text/html", result);
                  } else {
                     Serial.printf("Connecting to device: %02X:%02X:%02X...\n", addr[0], addr[1], addr[2]);
-                    ar4callbacks->providePin(-1); // reset pin
-                    /*
-                    bool status = ar4.connect(addr);
-                    if (status == AR4_OK) {
-                      server.send(200, "text/html", "OK");
+                    ar4callbacks.providePin(-1); // reset pin
+
+                    if (ar4.connect(&adv, false) == AR4_OK) {
+                        server.send(200, "text/html", "OK");
+                        
+                        // PIN prompt might lock web request, so we give extra 30s for pairing process
+                        // It will be teset to +5 sec once prompt is closed and web requests starts again
+                        scanBlockTimeout = millis() + 30000;
+
+                        ar4.secureConnection();
                     } else {
-                      server.send(200, "text/html", "Connection failed");
+                        server.send(200, "text/html", "Connection failed");
                     }
-                    */
-                    server.send(200, "text/html", "FIXME3");
                 }
             }
         } else {
@@ -461,7 +599,7 @@ bool startWebserver(bool ap) {
         if (!server.authenticate(www_username, password)) {
             return server.requestAuthentication();
         }
-        remove_all_bonded_devices();
+        ble_store_clear();
         wipe(CFG_DEVICE_OFFSET);
         server.send(200, "text/html", "removed paired devices");
     });
@@ -482,13 +620,7 @@ bool startWebserver(bool ap) {
     server.onNotFound(handleNotFound);
     server.begin();
 
-    xTaskCreate(
-        WiFiTaskCode,   /* Task function. */
-        "WiFiTask",     /* name of task. */
-        10000,            /* Stack size of task */
-        NULL,             /* parameter of the task */
-        1,                /* priority of the task */
-        &WiFiTask);     /* Task handle to keep track of created task */
+    startWebserverTask();
 
     return true;
 }
@@ -498,8 +630,7 @@ void task_sleep(uint32_t ms) {
 }
 
 void runBtScan() {
-    if (!scanCallbacks->isRunning()) {
-        scanCallbacks->setRunning(true);
+    if (!pScan->isScanning()) {
         xTaskCreate(
             BtScanTaskCode,   /* Task function. */
             "BtScanTask",     /* name of task. */
@@ -511,21 +642,9 @@ void runBtScan() {
 }
 
 void BtScanTaskCode(void* pvParameters) {
-    BLEDevice::init("");
+    Serial.println("Pairing BT device");
     
-    scanCallbacks->clearResults();
-
-    Serial.println("Scanning BT devices");
-
-    BLEScan* pBLEScan = BLEDevice::getScan();
-    pBLEScan->setAdvertisedDeviceCallbacks(scanCallbacks);
-    pBLEScan->setInterval(1349);
-    pBLEScan->setWindow(449);
-    pBLEScan->setActiveScan(false);
-    pBLEScan->start(CFG_BT_SCAN_DURATION);
-
-    Serial.println("BT Scan complete");
-    scanCallbacks->setRunning(false);
+    pScan->start(CFG_BT_SCAN_DURATION);
     vTaskDelete(BtScanTask);
 
     // This should't be reached...
@@ -535,7 +654,25 @@ void BtScanTaskCode(void* pvParameters) {
     }
 }
 
+void ntpSync() {
+    configTime(0, 0, nodeCfg.ntpserver);
+    struct tm timeinfo;
+    if(!getLocalTime(&timeinfo)){
+        Serial.println("Failed to obtain time");
+        return;
+    }
+    Serial.println(&timeinfo, "%A, %B %d %Y %H:%M:%S");
+}
+
+void NtpSyncTaskCode(void * pvParameters) {
+    for (;;) {
+        ntpSync();
+        task_sleep(3600000); // hourly time sync
+    }
+}
+
 void WiFiTaskCode(void * pvParameters) {
+    wifiTaskRunning = true;
     Serial.print("Task1 running on core ");
     Serial.println(xPortGetCoreID());
 
@@ -543,6 +680,9 @@ void WiFiTaskCode(void * pvParameters) {
 
     Serial.print("Waiting for clients....");
     for (;;) {
+       if (!isAp && WiFi.status() != WL_CONNECTED) {
+            setupWifiAndWebserver(true);
+        }
         server.handleClient();
         task_sleep(1);
     }

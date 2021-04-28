@@ -29,6 +29,8 @@ typedef struct NodeConfig { // 1:1 with eeprom bytes
     char organisation[17];
     char token[129];
     char bucket[33];
+
+    char ntpserver[48];
 } NodeConfig;
 #pragma pack(pop)
 

@@ -33,19 +33,27 @@ void setup() {
     configLoad();
     devicesLoad();
 
-    bool isAp = getBootWiFiMode();
-    bool started = startWebserver(isAp);
+    isAp = getBootWiFiMode();
 
-    if (started) {
-        Serial.println("WiFi and Web server started");
-    } else {
-        Serial.println("Failed to start WiFi");
-        return;
+    if (!setupWifiAndWebserver()) {
+         Serial.println("Failed to initialize.");
+         return;
     }
+
+    // Start NTP sync task
+    xTaskCreatePinnedToCore(
+        NtpSyncTaskCode,  /* Task function. */
+        "NtpSyncTask",    /* name of task. */
+        2048,             /* Stack size of task */
+        NULL,             /* parameter of the task */
+        1,                /* priority of the task */
+        &NtpSyncTask,     /* Task handle to keep track of created task */
+        0);               /* pin task to core 0 */
 
     influxClient = influxCreateClient(&nodeCfg);
 
-    Aranet4::init(ar4callbacks);
+    // Set up bluettoth security and callbacks
+    Aranet4::init();
 
     delay(500);
 
@@ -55,66 +63,66 @@ void setup() {
 }
 
 void loop() {
+    if (isAp) {
+      task_sleep(1000);
+      return;
+    }
+
     if (nextReport < millis()) {
-        nextReport = millis() + 30000; // 30s
+        nextReport = millis() + 10000; // 10s
         Point pt = influxCreateStatusPoint(&nodeCfg);
+        pt.addField("wifi_uptime", millis() - wifiConnectedAt);
         influxSendPoint(influxClient, pt);
     }
 
+    // Scan devices, then compare with saved devices and read data.
+
     int count = ar4devices.size;
 
-    for (int i=0; i<count; i++) {
-        esp_ble_addr_type_t type = BLE_ADDR_TYPE_RANDOM;
-        uint8_t retry = 0;
-        AranetDeviceStatus* s = &ar4status[i];
-        AranetDevice* d = s->device;
+    while (isScanOpen()) {
+        Serial.println("Waiting for scan to close");
+        // don't read data, while scan page is opened
+        task_sleep(1000);
+    }
+
+    for (int j=0; j<count; j++) {
+        AranetDeviceStatus* s = s = &ar4status[j];
+        AranetDevice* d = d = s->device;
 
         long expectedUpdateAt = s->updated + ((s->data.interval - s->data.ago) * 1000);
-        if (millis() < expectedUpdateAt) {
-            // not yet for update
-            continue;
-        }
+        if(millis() < expectedUpdateAt) continue;
 
-        // dev stub
-        if (memcmp(d->name, "Aranet4 0000", 12) == 0) {
-              type = BLE_ADDR_TYPE_PUBLIC;
-        }
-        
-        Serial.print("Conencting to: ");
+        Serial.print("Connecting to ");
         Serial.println(d->name);
-        
-        Aranet4* ar4 = new Aranet4();
-        ar4_err_t status = ar4->connect(d->addr, type);
 
-        while (retry++ < 3 && status != AR4_OK) {
-            ar4->disconnect();
-            task_sleep(100);
-            status = ar4->connect(d->addr, type);
-        }
+        ar4_err_t status = ar4.connect(d->addr);
 
         if (status == AR4_OK) {
-            Serial.print("Read OK: ");
-            s->data = ar4->getCurrentReadings();
+            s->data = ar4.getCurrentReadings();
             Serial.printf("  CO2: %i\n  T:  %.2f\n", s->data.co2, s->data.temperature / 20.0);
-            s->updated = millis();
+            if (ar4.getStatus() == AR4_OK && s->data.co2 != 0) {
+                s->updated = millis();
 
-            if (s->data.co2 != 0) {
+                Serial.print("Uploading data ...");
                 Point pt = influxCreatePoint(&nodeCfg, d, &s->data);
                 influxSendPoint(influxClient, pt);
+            } else {
+                Serial.print("Read failed.");       
             }
         } else {
-              Serial.printf("Failed: %i\n", status);
+            Serial.printf("Aranet4 connect failed: (%i)\n", status);
         }
 
-        ar4->disconnect();
-        task_sleep(500);
-        delete(ar4);
+        ar4.disconnect();
+        Serial.println("Disconnected.");
     }
+
+    influxFlushBuffer(influxClient);
 
     Serial.print("mem: ");
     Serial.print(ESP.getFreeHeap());
     Serial.print(" / ");
     Serial.println(ESP.getHeapSize());
-    
-    task_sleep(1000);
+
+    task_sleep(2500);
 }

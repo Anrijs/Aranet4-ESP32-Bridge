@@ -44,6 +44,9 @@ Point influxCreatePoint(NodeConfig *nodeCfg, AranetDevice* device, AranetData *d
 
 void influxSendPoint(InfluxDBClient *influxClient, Point pt) {
     influxClient->writePoint(pt);
+}
+
+void influxFlushBuffer(InfluxDBClient *influxClient) {
     if (!influxClient->isBufferEmpty()) {
         influxClient->flushBuffer();
     }

@@ -30,12 +30,12 @@ const char* htmlHeader =
   ".co2>b{font-size: 64px;}"
   ".co2-none .co2-txt{color: #aaa}"
   ".co2-none>.cardtop{background: #aaa;}"
-  ".co2-ok .co2-txt{color: #00ac00}"
-  ".co2-ok>.cardtop{background: #00ac00;}"
-  ".co2-warn .co2-txt{color: #fdee1f}"
-  ".co2-warn>.cardtop{background: #fdee1f;}"
-  ".co2-alert .co2-txt{color: #f32a1b}"
-  ".co2-alert>.cardtop{background: #f32a1b;}"
+  ".co2-ok .co2-txt{color: #079851}"
+  ".co2-ok>.cardtop{background: #079851;}"
+  ".co2-warn .co2-txt{color: #f29401}"
+  ".co2-warn>.cardtop{background: #f29401;}"
+  ".co2-alert .co2-txt{color: #cf1e2e}"
+  ".co2-alert>.cardtop{background: #cf1e2e;}"
   "</style>"
   "<script>"
   "function page(url) { window.location.href = url; }"
@@ -106,9 +106,7 @@ const char* scanResultsScript =
                 "let txt4 = (parts[4] == 1) ? 'Paired' : running ? 'scanning...' : '<a href=\"#\" onclick=\"pairDevice(' + parts[0] + ');\">Pair device</a>';"
                 "row.insertCell(3).innerHTML = txt4;"
             "}"
-            "if (running) {"
-                "setTimeout(fetchResults, 1000);"
-            "}"
+            "setTimeout(fetchResults, 1000);"
         "})"
         ".catch(function(err) {"
             "if (failed++ < 2) {"
@@ -238,11 +236,18 @@ String printAranetCard(AranetDeviceStatus* status, int id) {
   else if (status->data.battery > 20) { batimg = "30"; }
   else if (status->data.battery > 10) { batimg = "20"; }
   else { batimg = "10"; }
+
+  String btimg = "bluetooth";
+  // 
+  long updatedAgo = (millis() - status->updated) / 1000;
+  if (updatedAgo > status->data.interval + 5) {
+    btimg = "bluetoothred";
+  }
   
   card += "<div class=\"cardtop " + klass + "\"></div>";
   card += "<div class=\"cardbody\">";
   card +=   "<div>";
-  card +=     "<img src=\"/img/bluetooth.png\" class=\"cardimg\">";
+  card +=     "<img src=\"/img/"+btimg+".png\" class=\"cardimg\">";
   card +=     "<span class=\"cardtitle\">" + String(d->name) + "</span>";
   card +=       "<span style=\"float:right;\">";
   card +=         "<img class=\"batt-val\" src=\"/img/battery_" + batimg + ".png\" class=\"cardimg\">";
@@ -270,7 +275,6 @@ String printHtmlIndex(AranetDeviceStatus* devices, int count) {
   Serial.println(xPortGetCoreID());
 
   char buf[24];
-  String dev = String("");
   for (uint8_t i=0; i < count; i++) {
     bool ok = false;
     for (uint8_t j=0; j < 6; j++) {
@@ -283,12 +287,6 @@ String printHtmlIndex(AranetDeviceStatus* devices, int count) {
     if (!ok) {
       continue;
     }
-    
-    mac2str(devices[i].device->addr, buf, false);
-    dev += String(devices[i].device->name);
-    dev += " <small>" + String(buf) + "</small><br>";
-    sprintf(buf, "CO2: %i ppm<br>", devices[i].data.co2);
-    dev += String(buf);
 
     page += printAranetCard(&devices[i], i);
   }
@@ -299,8 +297,6 @@ String printHtmlIndex(AranetDeviceStatus* devices, int count) {
   page +=     "<img src=\"/img/plus.png\" class=\"cardimg\"> <span class=\"cardimg\">Add new device</span>";
   page +=   "</div>";
   page += "</div>";
-
-  page += printCard("Paired devices", dev);
 
   page += String(htmlFooter);
   return page;
@@ -330,7 +326,9 @@ String printHtmlConfig(NodeConfig* nodeCfg, bool updated = false) {
     );
   }
 
-  page += printCard("System", printHtmlTextInput("name", "Device Name", nodeCfg->name, 32));
+  page += printCard("System", printHtmlTextInput("name", "Device Name", nodeCfg->name, 32)
+                            + printHtmlTextInput("ntpserver", "NTP Server", nodeCfg->ntpserver, 47));
+  
   page += printCard("Connectivity", printHtmlTextInput("ssid", "Wi-Fi SSID", nodeCfg->ssid, 32)
                                   + printHtmlTextInput("password", "Wi-Fi Password", nodeCfg->password, 63)
                                   + printHtmlCheckboxInput("static_ip", "Set static IP address", nodeCfg->extras & CFG_EXTRA_BIT_STATIC_IP)
