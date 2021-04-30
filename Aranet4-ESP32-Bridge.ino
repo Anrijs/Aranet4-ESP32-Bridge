@@ -101,8 +101,48 @@ void loop() {
             s->data = ar4.getCurrentReadings();
             Serial.printf("  CO2: %i\n  T:  %.2f\n", s->data.co2, s->data.temperature / 20.0);
             if (ar4.getStatus() == AR4_OK && s->data.co2 != 0) {
-                s->updated = millis();
+                // Check how many records might have been skipped
+                int newRecords = (((millis() - s->updated) / 1000) / s->data.interval) - 1;
+                if (s->updated > 0 && newRecords > 0) {
+                    Serial.printf("I see missed %i records\n", newRecords);
+                    AranetDataCompact* logs = (AranetDataCompact*) malloc(sizeof(AranetDataCompact) * CFG_HISTORY_CHUNK_SIZE);
+                    AranetData adata;
+                    adata.ago = 0;
+                    adata.battery = s->data.battery;
+                    adata.interval = s->data.interval;
 
+                    int totalLogs = ar4.getTotalReadings();
+                    int start = totalLogs - newRecords;
+                    if (start < 1) start = 1;
+
+                    // TODO: is timestamp in seconds or milliseconds?
+                    time_t tnow = time(nullptr); // should be seconds
+                    long timestamp = tnow - (s->data.interval * newRecords);
+
+                    while (newRecords > 0) {
+                        uint16_t logCount = CFG_HISTORY_CHUNK_SIZE;
+                        if (newRecords < CFG_HISTORY_CHUNK_SIZE) logCount = newRecords;
+
+                        Serial.printf("Would get %i results from %i\n", logCount, start);
+                        ar4.getHistory(start, logCount, logs);
+
+                        for (uint16_t k = 0; k < logCount; k++) {
+                            adata.co2 = logs[k].co2;
+                            adata.temperature = logs[k].temperature;
+                            adata.pressure = logs[k].pressure;
+                            adata.humidity = logs[k].humidity;
+
+                            Point pt = influxCreatePointWithTimestamp(&nodeCfg, d, &adata, timestamp);
+                            influxSendPoint(influxClient, pt);
+                            timestamp += s->data.interval;
+                        }
+
+                        start += logCount;
+                        newRecords -= logCount;
+                    }
+                }
+
+                s->updated = millis();
                 Serial.print("Uploading data ...");
                 Point pt = influxCreatePoint(&nodeCfg, d, &s->data);
                 influxSendPoint(influxClient, pt);

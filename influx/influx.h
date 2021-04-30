@@ -10,12 +10,15 @@
 #include "Aranet4.h"
 
 InfluxDBClient* influxCreateClient(NodeConfig *nodeCfg) {
-  if (nodeCfg->dbver == 2) {
-    InfluxDBClient* influxClient = new InfluxDBClient(nodeCfg->url, nodeCfg->organisation, nodeCfg->bucket, nodeCfg->token, InfluxDbCloud2CACert);
-    influxClient->setWriteOptions(WriteOptions().bufferSize(WRITE_BUFFER_SIZE));
-    return influxClient;
-  }
-  return new InfluxDBClient(nodeCfg->url, nodeCfg->bucket);
+  InfluxDBClient* influxClient = nullptr;
+
+    if (nodeCfg->dbver == 2) {
+        influxClient = new InfluxDBClient(nodeCfg->url, nodeCfg->organisation, nodeCfg->bucket, nodeCfg->token, InfluxDbCloud2CACert);
+    } else {
+        influxClient = new InfluxDBClient(nodeCfg->url, nodeCfg->bucket);
+    }
+    influxClient->setWriteOptions(WriteOptions().writePrecision(WRITE_PRECISION).bufferSize(WRITE_BUFFER_SIZE));
+    return ;
 }
 
 Point influxCreateStatusPoint(NodeConfig *nodeCfg) {
@@ -42,12 +45,21 @@ Point influxCreatePoint(NodeConfig *nodeCfg, AranetDevice* device, AranetData *d
     return point;
 }
 
+Point influxCreatePointWithTimestamp(NodeConfig *nodeCfg, AranetDevice* device, AranetData *data, long timestamp) {
+    Point point = influxCreatePoint(nodeCfg, device, data);
+    point.setTime(WRITE_PRECISION);
+    point.setTime(timestamp);
+    return point;
+}
+
 void influxSendPoint(InfluxDBClient *influxClient, Point pt) {
-    influxClient->writePoint(pt);
+    if (influxClient) {
+        influxClient->writePoint(pt);
+    }
 }
 
 void influxFlushBuffer(InfluxDBClient *influxClient) {
-    if (!influxClient->isBufferEmpty()) {
+    if (influxClient && !influxClient->isBufferEmpty()) {
         influxClient->flushBuffer();
     }
 }

@@ -16,11 +16,16 @@
 #define CFG_MAX_DEVICES 4
 #define CFG_DEVICE_OFFSET 512 // eeprom byte offset from node cfg
 
+#define CFG_HISTORY_CHUNK_SIZE 120
+
+#define CFG_NTP_SYNC_INTERVAL 60 // (minutes)
+
 const char *ssid = "Aranet4-ESP32 Bridge";
 const char *password = "Ar@net4Br1dge";
 const char* www_username = "admin";
 
 // influxdb
 #define WRITE_BUFFER_SIZE 30
+#define WRITE_PRECISION WritePrecision::S
 
 #endif
