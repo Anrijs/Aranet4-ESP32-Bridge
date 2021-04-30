@@ -9,21 +9,32 @@
 #include <InfluxDbCloud.h>
 #include "Aranet4.h"
 
-InfluxDBClient* influxCreateClient(NodeConfig *nodeCfg) {
+InfluxDBClient* influxCreateClient(Preferences *prefs) {
   InfluxDBClient* influxClient = nullptr;
 
-    if (nodeCfg->dbver == 2) {
-        influxClient = new InfluxDBClient(nodeCfg->url, nodeCfg->organisation, nodeCfg->bucket, nodeCfg->token, InfluxDbCloud2CACert);
-    } else {
-        influxClient = new InfluxDBClient(nodeCfg->url, nodeCfg->bucket);
-    }
-    influxClient->setWriteOptions(WriteOptions().writePrecision(WRITE_PRECISION).bufferSize(WRITE_BUFFER_SIZE));
-    return ;
+  if (prefs->getString("url").length() < 1 || prefs->getString("bucket").length() < 1) {
+      return influxClient;
+  }
+
+  if (prefs->getUChar("dbver") == 2) {
+    influxClient = new InfluxDBClient(
+        prefs->getString("url").c_str(),
+        prefs->getString("organisation").c_str(),
+        prefs->getString("bucket").c_str(),
+        prefs->getString("token").c_str(),
+        InfluxDbCloud2CACert
+    );
+  } else {
+    influxClient = new InfluxDBClient(prefs->getString("url").c_str(), prefs->getString("bucket").c_str());
+  }
+
+  influxClient->setWriteOptions(WriteOptions().writePrecision(WRITE_PRECISION).bufferSize(WRITE_BUFFER_SIZE));
+  return influxClient;
 }
 
-Point influxCreateStatusPoint(NodeConfig *nodeCfg) {
+Point influxCreateStatusPoint(Preferences *prefs) {
     Point point("device_status");
-    point.addTag("device", nodeCfg->name);
+    point.addTag("device", prefs->getString("name"));
     point.addField("rssi", WiFi.RSSI());
     point.addField("uptime", millis());
     point.addField("heap_free", ESP.getFreeHeap());
@@ -31,9 +42,9 @@ Point influxCreateStatusPoint(NodeConfig *nodeCfg) {
     return point;
 }
 
-Point influxCreatePoint(NodeConfig *nodeCfg, AranetDevice* device, AranetData *data) {
+Point influxCreatePoint(Preferences *prefs, AranetDevice* device, AranetData *data) {
     Point point("aranet4");
-    point.addTag("device", nodeCfg->name);
+    point.addTag("device", prefs->getString("name"));
     point.addTag("name", device->name);
     point.addField("co2", data->co2);
     point.addField("temperature", data->temperature / 20.0);
@@ -45,21 +56,21 @@ Point influxCreatePoint(NodeConfig *nodeCfg, AranetDevice* device, AranetData *d
     return point;
 }
 
-Point influxCreatePointWithTimestamp(NodeConfig *nodeCfg, AranetDevice* device, AranetData *data, long timestamp) {
-    Point point = influxCreatePoint(nodeCfg, device, data);
+Point influxCreatePointWithTimestamp(Preferences *prefs, AranetDevice* device, AranetData *data, long timestamp) {
+    Point point = influxCreatePoint(prefs, device, data);
     point.setTime(WRITE_PRECISION);
     point.setTime(timestamp);
     return point;
 }
 
 void influxSendPoint(InfluxDBClient *influxClient, Point pt) {
-    if (influxClient) {
+    if (influxClient != nullptr) {
         influxClient->writePoint(pt);
     }
 }
 
 void influxFlushBuffer(InfluxDBClient *influxClient) {
-    if (influxClient && !influxClient->isBufferEmpty()) {
+    if (influxClient != nullptr && !influxClient->isBufferEmpty()) {
         influxClient->flushBuffer();
     }
 }

@@ -14,7 +14,6 @@
 #include "esp_task_wdt.h"
 
 long nextReport = 0;
-InfluxDBClient* influxClient = nullptr;
 
 void setup() {
     Serial.begin(115200);
@@ -27,8 +26,6 @@ void setup() {
         Serial.println("An Error has occurred while mounting SPIFFS");
         return;
     }
-    
-    //wipe(CFG_DEVICE_OFFSET);
 
     configLoad();
     devicesLoad();
@@ -40,17 +37,8 @@ void setup() {
          return;
     }
 
-    // Start NTP sync task
-    xTaskCreatePinnedToCore(
-        NtpSyncTaskCode,  /* Task function. */
-        "NtpSyncTask",    /* name of task. */
-        2048,             /* Stack size of task */
-        NULL,             /* parameter of the task */
-        1,                /* priority of the task */
-        &NtpSyncTask,     /* Task handle to keep track of created task */
-        0);               /* pin task to core 0 */
-
-    influxClient = influxCreateClient(&nodeCfg);
+    startNtpSyncTask();
+    createInfluxClient();
 
     // Set up bluettoth security and callbacks
     Aranet4::init();
@@ -70,7 +58,7 @@ void loop() {
 
     if (nextReport < millis()) {
         nextReport = millis() + 10000; // 10s
-        Point pt = influxCreateStatusPoint(&nodeCfg);
+        Point pt = influxCreateStatusPoint(&prefs);
         pt.addField("wifi_uptime", millis() - wifiConnectedAt);
         influxSendPoint(influxClient, pt);
     }
@@ -132,7 +120,7 @@ void loop() {
                             adata.pressure = logs[k].pressure;
                             adata.humidity = logs[k].humidity;
 
-                            Point pt = influxCreatePointWithTimestamp(&nodeCfg, d, &adata, timestamp);
+                            Point pt = influxCreatePointWithTimestamp(&prefs, d, &adata, timestamp);
                             influxSendPoint(influxClient, pt);
                             timestamp += s->data.interval;
                         }
@@ -143,8 +131,9 @@ void loop() {
                 }
 
                 s->updated = millis();
+
                 Serial.print("Uploading data ...");
-                Point pt = influxCreatePoint(&nodeCfg, d, &s->data);
+                Point pt = influxCreatePoint(&prefs, d, &s->data);
                 influxSendPoint(influxClient, pt);
             } else {
                 Serial.print("Read failed.");       

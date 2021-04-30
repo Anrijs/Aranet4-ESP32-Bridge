@@ -149,9 +149,9 @@ String printHtmlLabel(char *name, char* title) {
     return String(tmp);
 }
 
-String printHtmlTextInput(char *name, char* title, char* value, uint8_t maxlen) {
+String printHtmlTextInput(char *name, char* title, String value, uint8_t maxlen) {
   char tmp[256];
-  sprintf(tmp, "<br><input type=\"text\" name=\"%s\" maxlength=\"%i\" value=\"%s\"></br>", name, maxlen, value);
+  sprintf(tmp, "<br><input type=\"text\" name=\"%s\" maxlength=\"%i\" value=\"%s\"></br>", name, maxlen, value.c_str());
   return printHtmlLabel(name, title) + String(tmp);
 }
 
@@ -304,7 +304,7 @@ String printHtmlIndex(AranetDeviceStatus* devices, int count) {
   return page;
 }
 
-String printHtmlConfig(NodeConfig* nodeCfg, bool updated = false) {
+String printHtmlConfig(Preferences* prefs, bool updated = false) {
   String page = String(htmlHeader);
 
   page += "<form id=\"cfg\" method=\"post\">";
@@ -314,10 +314,10 @@ String printHtmlConfig(NodeConfig* nodeCfg, bool updated = false) {
   char gateway[16];
   char dns[16];
 
-  ip2str(nodeCfg->ip_addr, ipAddr);
-  ip2str(nodeCfg->netmask, netmask);
-  ip2str(nodeCfg->gateway, gateway);
-  ip2str(nodeCfg->dns, dns);
+  ip2str(prefs->getUInt("ip_addr"), ipAddr);
+  ip2str(prefs->getUInt("netpask"), netmask);
+  ip2str(prefs->getUInt("gateway"), gateway);
+  ip2str(prefs->getUInt("dns"), dns);
 
   if (updated) {
     page += printCard(
@@ -328,12 +328,12 @@ String printHtmlConfig(NodeConfig* nodeCfg, bool updated = false) {
     );
   }
 
-  page += printCard("System", printHtmlTextInput("name", "Device Name", nodeCfg->name, 32)
-                            + printHtmlTextInput("ntpserver", "NTP Server", nodeCfg->ntpserver, 47));
+  page += printCard("System", printHtmlTextInput("name", "Device Name", prefs->getString("name"), 32)
+                            + printHtmlTextInput("ntpserver", "NTP Server", prefs->getString("ntpserver"), 47));
   
-  page += printCard("Connectivity", printHtmlTextInput("ssid", "Wi-Fi SSID", nodeCfg->ssid, 32)
-                                  + printHtmlTextInput("password", "Wi-Fi Password", nodeCfg->password, 63)
-                                  + printHtmlCheckboxInput("static_ip", "Set static IP address", nodeCfg->extras & CFG_EXTRA_BIT_STATIC_IP)
+  page += printCard("Connectivity", printHtmlTextInput("ssid", "Wi-Fi SSID", prefs->getString("ssid"), 32)
+                                  + printHtmlTextInput("password", "Wi-Fi Password", prefs->getString("password"), 63)
+                                  + printHtmlCheckboxInput("static_ip", "Set static IP address", prefs->getUInt("extras") & CFG_EXTRA_BIT_STATIC_IP)
                                   + "<div id=\"ipcfg\">"
                                   + printHtmlTextInput("ip_addr", "IP address", ipAddr, 15)
                                   + printHtmlTextInput("netmask", "Network mask", netmask, 15)
@@ -341,11 +341,11 @@ String printHtmlConfig(NodeConfig* nodeCfg, bool updated = false) {
                                   + printHtmlTextInput("dns", "DNS", dns, 15)
                                   + "</div>");
 
-  page += printCard("Influx DB", printHtmlTextInput("url", "Url", nodeCfg->url, 128)
-                               + printHtmlTextInput("org", "Organisation", nodeCfg->organisation, 16)
-                               + printHtmlTextInput("token", "Token", nodeCfg->token, 128)
-                               + printHtmlTextInput("bucket", "Bucket/Database", nodeCfg->bucket, 32)
-                               + printHtmlCheckboxInput("dbver", "InfluxDB v2", nodeCfg->dbver == 2));
+  page += printCard("Influx DB", printHtmlTextInput("url", "Url", prefs->getString("url"), 128)
+                               + printHtmlTextInput("org", "Organisation", prefs->getString("organisation"), 16)
+                               + printHtmlTextInput("token", "Token", prefs->getString("token"), 128)
+                               + printHtmlTextInput("bucket", "Bucket/Database", prefs->getString("bucket"), 32)
+                               + printHtmlCheckboxInput("dbver", "InfluxDB v2", prefs->getUChar("dbver") == 2));
 
   page += printCard(
     "Save", "",
