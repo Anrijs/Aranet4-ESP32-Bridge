@@ -8,8 +8,6 @@
 #include "SPIFFS.h"
 //#include "esp_task_wdt.h"
 
-#define CFG_EXTRA_BIT_STATIC_IP   0x02
-
 #include "vector"
 #include "config.h"
 #include "utils.h"
@@ -75,7 +73,7 @@ void NtpSyncTaskCode(void* pvParameters);
 // ---------------------------------------------------
 
 bool isManualIp() {
-  return (prefs.getUInt("extras") & CFG_EXTRA_BIT_STATIC_IP) != 0;
+  return (prefs.getBool(PREF_K_WIFI_IP_STATIC));
 }
 
 bool isScanOpen() {
@@ -158,7 +156,7 @@ int createInfluxClient() {
 
 bool getBootWiFiMode() {
   bool isAp = false;
-  if (prefs.getString("ssid").length() == 0) return true;
+  if (prefs.getString(PREF_K_WIFI_SSID).length() == 0) return true;
 
   long timeout = millis() + 3000;
 
@@ -281,18 +279,18 @@ bool setupWiFi() {
     WiFi.mode(WIFI_AP_STA);
     WiFi.softAP(ssid, password);
   } else {
-    Serial.printf("Starting STATION: %s\n", prefs.getString("ssid").c_str());
+    Serial.printf("Starting STATION: %s\n", prefs.getString(PREF_K_WIFI_SSID).c_str());
     WiFi.mode(WIFI_STA);
-    WiFi.setHostname(prefs.getString("name").c_str());
+    WiFi.setHostname(prefs.getString(PREF_K_SYS_NAME).c_str());
 
     // manual ip
     if (isManualIp()) {
-      if (!WiFi.config(prefs.getUInt("ip_addr"), prefs.getUInt("gateway"), prefs.getUInt("netmask"), prefs.getUInt("dns"))) {
+      if (!WiFi.config(prefs.getUInt(PREF_K_WIFI_IP_ADDR), prefs.getUInt(PREF_K_WIFI_IP_GW), prefs.getUInt(PREF_K_WIFI_IP_MASK), prefs.getUInt(PREF_K_WIFI_IP_DNS))) {
         Serial.println("STA Failed to configure");
       }
     }
 
-    WiFi.begin(prefs.getString("ssid").c_str(), prefs.getString("password").c_str(), 0, NULL);
+    WiFi.begin(prefs.getString(PREF_K_WIFI_SSID).c_str(), prefs.getString(PREF_K_WIFI_PASSWORD).c_str(), 0, NULL);
 
     long timeout = millis() + 15000;
     while (WiFi.status() != WL_CONNECTED) {
@@ -372,62 +370,69 @@ bool startWebserver() {
     // process data...
 
     // Generic
-    if (server.hasArg("name"))     {
-      prefs.putString("name", server.arg("name"));
+    if (server.hasArg(PREF_K_SYS_NAME))     {
+      prefs.putString(PREF_K_SYS_NAME, server.arg(PREF_K_SYS_NAME));
     }
-    if (server.hasArg("ntpserver"))      {
-      prefs.putString("ntpserver", server.arg("ntpserver"));
+    if (server.hasArg(PREF_K_NTP_URL))      {
+      prefs.putString(PREF_K_NTP_URL, server.arg(PREF_K_NTP_URL));
     }
 
     // Network
-    if (server.hasArg("ssid"))     {
-      prefs.putString("ssid", server.arg("ssid"));
+    if (server.hasArg(PREF_K_WIFI_SSID))     {
+      prefs.putString(PREF_K_WIFI_SSID, server.arg(PREF_K_WIFI_SSID));
     }
 
-    if (server.hasArg("password")) {
-      prefs.putString("password", server.arg("password"));
+    if (server.hasArg(PREF_K_WIFI_PASSWORD)) {
+      prefs.putString(PREF_K_WIFI_PASSWORD, server.arg(PREF_K_WIFI_PASSWORD));
     }
 
     // IP
-    if (server.hasArg("ip_addr")) {
-      prefs.putUInt("ip_addr", str2ip(server.arg("ip_addr")));
+    prefs.putBool(PREF_K_WIFI_IP_STATIC, server.hasArg(PREF_K_WIFI_IP_STATIC));
+
+    if (server.hasArg(PREF_K_WIFI_IP_ADDR)) {
+      prefs.putUInt(PREF_K_WIFI_IP_ADDR, str2ip(server.arg(PREF_K_WIFI_IP_ADDR)));
     }
 
-    if (server.hasArg("netmask")) {
-      prefs.putUInt("netmask", str2ip(server.arg("netmask")));
+    if (server.hasArg(PREF_K_WIFI_IP_MASK)) {
+      prefs.putUInt(PREF_K_WIFI_IP_MASK, str2ip(server.arg(PREF_K_WIFI_IP_MASK)));
     }
 
-    if (server.hasArg("gateway")) {
-      prefs.putUInt("gateway", str2ip(server.arg("gateway")));
+    if (server.hasArg(PREF_K_WIFI_IP_GW)) {
+      prefs.putUInt(PREF_K_WIFI_IP_GW, str2ip(server.arg(PREF_K_WIFI_IP_GW)));
     }
 
-    if (server.hasArg("dns")) {
-      prefs.putUInt("dns", str2ip(server.arg("dns")));
+    if (server.hasArg(PREF_K_WIFI_IP_DNS)) {
+      prefs.putUInt(PREF_K_WIFI_IP_DNS, str2ip(server.arg(PREF_K_WIFI_IP_DNS)));
     }
 
     // Influx
-    if (server.hasArg("url")) {
-      prefs.putString("url", server.arg("url"));
+    if (server.hasArg(PREF_K_INFLUX_URL)) {
+      prefs.putString(PREF_K_INFLUX_URL, server.arg(PREF_K_INFLUX_URL));
     }
-    if (server.hasArg("org")) {
-      prefs.putString("organisation", server.arg("org"));
+    if (server.hasArg(PREF_K_INFLUX_ORG)) {
+      prefs.putString(PREF_K_INFLUX_ORG, server.arg(PREF_K_INFLUX_ORG));
     }
-    if (server.hasArg("token")) {
-      prefs.putString("token", server.arg("token"));
+    if (server.hasArg(PREF_K_INFLUX_TOKEN)) {
+      prefs.putString(PREF_K_INFLUX_TOKEN, server.arg(PREF_K_INFLUX_TOKEN));
     }
-    if (server.hasArg("bucket")) {
-      prefs.putString("bucket", server.arg("bucket"));
+    if (server.hasArg(PREF_K_INFLUX_BUCKET)) {
+      prefs.putString(PREF_K_INFLUX_BUCKET, server.arg(PREF_K_INFLUX_BUCKET));
     }
+    prefs.putUChar(PREF_K_INFLUX_DBVER, server.hasArg(PREF_K_INFLUX_DBVER) ? 2 : 1);
 
-    // Extras
-    uint32_t extras = 0;
-    if (server.hasArg("static_ip")) {
-      extras |= CFG_EXTRA_BIT_STATIC_IP;
+    // MQTT
+    if (server.hasArg(PREF_K_MQTT_CLIENT_ID)) {
+      prefs.putString(PREF_K_MQTT_CLIENT_ID, server.arg(PREF_K_MQTT_CLIENT_ID));
     }
-
-    prefs.putUChar("dbver", server.hasArg("dbver") ? 2 : 1);
-
-    prefs.putUInt("extras", extras);
+    if (server.hasArg(PREF_K_MQTT_PORT)) {
+      prefs.putUShort(PREF_K_MQTT_PORT, server.arg(PREF_K_MQTT_PORT).toInt());
+    }
+    if (server.hasArg(PREF_K_MQTT_USER)) {
+      prefs.putString(PREF_K_MQTT_USER, server.arg(PREF_K_MQTT_USER));
+    }
+    if (server.hasArg(PREF_K_MQTT_PASSWORD)) {
+      prefs.putString(PREF_K_MQTT_PASSWORD, server.arg(PREF_K_MQTT_PASSWORD));
+    }
 
     createInfluxClient();
     ntpSyncTime = 0; // sync now
@@ -625,7 +630,7 @@ void startNtpSyncTask() {
 
 bool ntpSync() {
   Serial.println("NTP: sync time");
-  configTime(0, 0, prefs.getString("ntpserver").c_str());
+  configTime(0, 0, prefs.getString(PREF_K_NTP_URL).c_str());
   struct tm timeinfo;
   if (!getLocalTime(&timeinfo)) {
     Serial.println("NTP: Failed to obtain time");
