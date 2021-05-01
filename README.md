@@ -43,4 +43,4 @@ If MQTT client is set up, it will send measurements to server right after new me
 `aranet4bridge/<deviceid>/battery`
 
 
-Aranet4 name is used for <deivceid>. If name is `Aranet4 000ABC`, <deviceid> will be `aranet4-000abc`
+Aranet4 name is used for `<deivceid>`. If name is `Aranet4 000ABC`, `<deviceid>` will be `aranet4-000abc`
