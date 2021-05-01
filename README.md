@@ -31,10 +31,16 @@ If Some measurements have been skipped, since last successful measurement, progr
 
 ## MQTT
 If MQTT client is set up, it will send measurements to server right after new measaurement has been made. Data is sent to following topics:
+
 `aranet4bridge/<deviceid>/co2`
+
 `aranet4bridge/<deviceid>/temperature`
+
 `aranet4bridge/<deviceid>/pressure`
+
 `aranet4bridge/<deviceid>/humidity`
+
 `aranet4bridge/<deviceid>/battery`
+
 
 Aranet4 name is used for <deivceid>. If name is `Aranet4 000ABC`, <deviceid> will be `aranet4-000abc`
