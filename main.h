@@ -15,7 +15,9 @@
 #include "bt.h"
 #include "html.h"
 #include "Aranet4.h"
+
 #include "influx/influx.h"
+#include "mqtt/mqtt.h"
 
 #define MODE_PIN 13
 #define LED_PIN  2
@@ -35,6 +37,9 @@ AranetDeviceStatus ar4status[CFG_MAX_DEVICES];
 
 Aranet4 ar4(&ar4callbacks);
 InfluxDBClient* influxClient = nullptr;
+
+WiFiClient espClient;
+MqttClient mqttClient(espClient);
 
 // RTOS
 TaskHandle_t BtScanTask;
@@ -144,7 +149,7 @@ int configLoad() {
 }
 
 /*
-   Startt background tasks and init objects
+   Create influxdb client
 */
 int createInfluxClient() {
   if (influxClient != nullptr) {
@@ -421,8 +426,8 @@ bool startWebserver() {
     prefs.putUChar(PREF_K_INFLUX_DBVER, server.hasArg(PREF_K_INFLUX_DBVER) ? 2 : 1);
 
     // MQTT
-    if (server.hasArg(PREF_K_MQTT_CLIENT_ID)) {
-      prefs.putString(PREF_K_MQTT_CLIENT_ID, server.arg(PREF_K_MQTT_CLIENT_ID));
+    if (server.hasArg(PREF_K_MQTT_SERVER)) {
+      prefs.putUInt(PREF_K_MQTT_SERVER, str2ip(server.arg(PREF_K_MQTT_SERVER)));
     }
     if (server.hasArg(PREF_K_MQTT_PORT)) {
       prefs.putUShort(PREF_K_MQTT_PORT, server.arg(PREF_K_MQTT_PORT).toInt());

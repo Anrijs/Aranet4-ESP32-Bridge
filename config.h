@@ -28,8 +28,10 @@ const char* www_username = "admin";
 #define WRITE_BUFFER_SIZE 30
 #define WRITE_PRECISION WritePrecision::S
 
-// Keystore keys
+// mqtt
+#define CFG_DEF_MQTT_PORT 1883
 
+// Keystore keys
 #define PREF_K_SYS_NAME       "sys_name"
 
 #define PREF_K_NTP_URL        "ntp_url"
@@ -49,7 +51,7 @@ const char* www_username = "admin";
 #define PREF_K_INFLUX_BUCKET  "influx_bucket"
 #define PREF_K_INFLUX_DBVER   "influx_dbver"
 
-#define PREF_K_MQTT_CLIENT_ID "mqtt_client_id"
+#define PREF_K_MQTT_SERVER    "mqtt_server_ip"
 #define PREF_K_MQTT_PORT      "mqtt_port"
 #define PREF_K_MQTT_USER      "mqtt_user"
 #define PREF_K_MQTT_PASSWORD  "mqtt_password"

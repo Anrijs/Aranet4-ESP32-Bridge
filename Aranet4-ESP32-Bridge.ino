@@ -37,8 +37,10 @@ void setup() {
          return;
     }
 
-    startNtpSyncTask();
     createInfluxClient();
+    //setupMqttClient();
+
+    startNtpSyncTask();
 
     // Set up bluettoth security and callbacks
     Aranet4::init();
@@ -135,6 +137,7 @@ void loop() {
                 Serial.print("Uploading data ...");
                 Point pt = influxCreatePoint(&prefs, d, &s->data);
                 influxSendPoint(influxClient, pt);
+                mqttSendPoint(&mqttClient, &prefs, d, &s->data);
             } else {
                 Serial.print("Read failed.");       
             }

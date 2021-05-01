@@ -313,11 +313,13 @@ String printHtmlConfig(Preferences* prefs, bool updated = false) {
   char netmask[16];
   char gateway[16];
   char dns[16];
+  char mqttIpAddr[16];
 
   ip2str(prefs->getUInt(PREF_K_WIFI_IP_ADDR), ipAddr);
   ip2str(prefs->getUInt(PREF_K_WIFI_IP_MASK), netmask);
   ip2str(prefs->getUInt(PREF_K_WIFI_IP_GW), gateway);
   ip2str(prefs->getUInt(PREF_K_WIFI_IP_DNS), dns);
+  ip2str(prefs->getUInt(PREF_K_MQTT_SERVER), mqttIpAddr);
 
   if (updated) {
     page += printCard(
@@ -347,7 +349,7 @@ String printHtmlConfig(Preferences* prefs, bool updated = false) {
                                + printHtmlTextInput(PREF_K_INFLUX_BUCKET, "Bucket/Database", prefs->getString(PREF_K_INFLUX_BUCKET), 32)
                                + printHtmlCheckboxInput(PREF_K_INFLUX_DBVER, "InfluxDB v2", prefs->getUChar(PREF_K_INFLUX_DBVER) == 2));
 
-  page += printCard("MQTT CLient", printHtmlTextInput(PREF_K_MQTT_CLIENT_ID, "Client ID", prefs->getString(PREF_K_MQTT_CLIENT_ID), 128)
+  page += printCard("MQTT Client", printHtmlTextInput(PREF_K_MQTT_SERVER, "Server IP address", mqttIpAddr, 15)
                                + printHtmlNumberInput(PREF_K_MQTT_PORT, "Port", prefs->getUShort(PREF_K_MQTT_PORT), 65535)
                                + printHtmlTextInput(PREF_K_MQTT_USER, "User", prefs->getString(PREF_K_MQTT_USER), 128)
                                + printHtmlTextInput(PREF_K_MQTT_PASSWORD, "Password", prefs->getString(PREF_K_MQTT_PASSWORD), 128));
