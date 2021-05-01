@@ -1,11 +1,12 @@
 # Aranet4-ESP32 Bridge
-Connect your Aranet4 to ESP32 and view measurements in browser or send them to InfluxDB.
+Connect your Aranet4 to ESP32 and view measurements in browser or send them to InfluxDB and MQTT server.
 
 ## Installation
 1. Set up [Arduino](https://www.arduino.cc/) with [ESP32 board library](https://github.com/espressif/arduino-esp32) (tested on v1.0.6)
 2. Install Arduino libraries:
-	[Aranet4-ESP32](https://github.com/Anrijs/Aranet4-ESP32)
-	[InfluxDB-Client-for-Arduino](https://github.com/tobiasschuerg/InfluxDB-Client-for-Arduino)
+	* [Aranet4-ESP32](https://github.com/Anrijs/Aranet4-ESP32)
+	* [InfluxDB-Client-for-Arduino](https://github.com/tobiasschuerg/InfluxDB-Client-for-Arduino)
+	* [Arduino Mqtt Client](https://github.com/arduino-libraries/ArduinoMqttClient/)
 3. Change Tools->Partition scheme to`No OTA (2MB APP/2MB SPIFFS)`
 4. Compile and flash ESP32
 5. For image resources SPIFFS also needs to be flashed. Install[arduino-esp32fs-plugin](https://github.com/me-no-dev/arduino-esp32fs-plugin) and after restarting Arduino IDE use Tools->ESP32 Sketch Data Upload
@@ -23,3 +24,17 @@ Connect your Aranet4 to ESP32 and view measurements in browser or send them to I
 
 Now in home screen You should see measurements from all paired Aranet4 devices.
 
+## InfluxDB
+If InfluxDB is set up, all measurements will be sent to database right after new measaurement has been made.
+
+If Some measurements have been skipped, since last successful measurement, program will atempt to read and send missed measurements, with adjusted timestamp.
+
+## MQTT
+If MQTT client is set up, it will send measurements to server right after new measaurement has been made. Data is sent to following topics:
+`aranet4bridge/<deviceid>/co2`
+`aranet4bridge/<deviceid>/temperature`
+`aranet4bridge/<deviceid>/pressure`
+`aranet4bridge/<deviceid>/humidity`
+`aranet4bridge/<deviceid>/battery`
+
+Aranet4 name is used for <deivceid>. If name is `Aranet4 000ABC`, <deviceid> will be `aranet4-000abc`
