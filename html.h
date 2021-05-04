@@ -48,8 +48,8 @@ const char* htmlHeader =
   " " VERSION_CODE " "
   "</small>"
   "<div id=\"hdrr\">" // start right
-  "<a href=\"/\" class=\"imgbtn\"><img src=\"/img/home.png\"></a>"
-  "<a href=\"/settings\" class=\"imgbtn\"><img src=\"/img/settings.png\"></a>"
+  "<a href=\"/\" class=\"imgbtn\"><img src=\"/img/home.png\" alt=\"Home\"></a>"
+  "<a href=\"/settings\" class=\"imgbtn\"><img src=\"/img/settings.png\" alt=\"Settings\"></a>"
   "</div>" // end right
   "</div></div>"
   "<div class=\"content\">";
@@ -250,18 +250,18 @@ String printAranetCard(AranetDeviceStatus* status, int id) {
   card +=     "<img src=\"/img/"+btimg+".png\" class=\"cardimg\">";
   card +=     "<span class=\"cardtitle\">" + String(d->name) + "</span>";
   card +=       "<span style=\"float:right;\">";
-  card +=         "<img class=\"batt-val\" src=\"/img/battery_" + batimg + ".png\" class=\"cardimg\">";
+  card +=         "<img class=\"batt-val\" src=\"/img/battery_" + batimg + ".png\" class=\"cardimg\" title=\"" + String(status->data.battery) + "%\">";
   //card +=         "<img src=\"/img/graph.png\" class=\"cardimg\">";
   //card +=         "<img src=\"/img/settings_dash.png\" class=\"cardimg\">";
   card +=       "</span>";
   card +=     "</div>";
   card +=     "<div class=\"co2\">";
-  card +=       "<img style=\"margin-right: 16px; height:32px;\" src=\"/img/co2.png\"><b class=\"co2-val co2-txt\"\">" + String(buf0) + "</b><span class=\"co2-txt\">ppm</span>";
+  card +=       "<img style=\"margin-right: 16px; height:32px;\" src=\"/img/co2.png\" alt=\"CO2\"><b class=\"co2-val co2-txt\"\">" + String(buf0) + "</b><span class=\"co2-txt\">ppm</span>";
   card +=     "</div>";
   card +=     "<div style=\"display: flex;\">";
-  card +=       "<div class=\"cardfl\"><img src=\"/img/temp.png\"><br><b class=\"temp-val\" style=\"font-size: 28px;\">" + String(buf1) + "</b>°C</div>";
-  card +=       "<div class=\"cardfl\"><img src=\"/img/humidity.png\"><br><b class=\"humi-val\" style=\"font-size: 28px;\">" + String(buf2) + "</b>%</div>";
-  card +=       "<div class=\"cardfl\"><img src=\"/img/pressure.png\"><br><b class=\"pres-val\" style=\"font-size: 28px;\">" + String(buf3) + "</b>hPa</div>";
+  card +=       "<div class=\"cardfl\"><img src=\"/img/temp.png\" alt=\"Temperature\"><br><b class=\"temp-val\" style=\"font-size: 28px;\">" + String(buf1) + "</b>°C</div>";
+  card +=       "<div class=\"cardfl\"><img src=\"/img/humidity.png\" alt=\"Humidity\"><br><b class=\"humi-val\" style=\"font-size: 28px;\">" + String(buf2) + "</b>%</div>";
+  card +=       "<div class=\"cardfl\"><img src=\"/img/pressure.png\" alt=\"Pressure\"><br><b class=\"pres-val\" style=\"font-size: 28px;\">" + String(buf3) + "</b>hPa</div>";
   card +=     "</div>";
   card +=   "</div>";
   card += "</div>";

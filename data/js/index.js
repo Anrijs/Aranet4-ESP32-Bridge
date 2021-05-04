@@ -45,6 +45,7 @@ function updateCards() {
       }
       card.getElementsByClassName("cardimg")[0].src = "/img/" + btimg + ".png";
       card.getElementsByClassName("batt-val")[0].src = "/img/battery_" + batimg + ".png";
+      card.getElementsByClassName("batt-val")[0].title = batt + "%";
       card.getElementsByClassName("co2-txt")[0].textContent = co2;
       card.getElementsByClassName("temp-val")[0].textContent = pt[4];
       card.getElementsByClassName("humi-val")[0].textContent = pt[6];
