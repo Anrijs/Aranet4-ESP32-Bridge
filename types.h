@@ -21,6 +21,7 @@ typedef struct AranetDeviceStatus {
     AranetDevice* device;
     AranetData data;
     long updated = 0;
+    uint16_t pending = 0;
 };
 
 #endif
