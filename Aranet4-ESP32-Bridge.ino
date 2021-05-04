@@ -44,6 +44,7 @@ void setup() {
 
     // Set up bluettoth security and callbacks
     Aranet4::init();
+    ar4.setConnectTimeout(CFG_BT_CONNECT_TIMEOUT);
 
     delay(500);
 

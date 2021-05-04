@@ -10,7 +10,9 @@
 
 #define CFG_VER 2
 
-#define CFG_BT_SCAN_DURATION 5 // seconds
+#define CFG_BT_SCAN_DURATION    5 // seconds
+#define CFG_BT_CONNECT_TIMEOUT  5 // seconds
+#define CFG_BT_TIMEOUT_DELAY   15 // seconds
 
 #define CFG_DEV_VER 1
 #define CFG_MAX_DEVICES 4
