@@ -34,7 +34,7 @@ InfluxDBClient* influxCreateClient(Preferences *prefs) {
 
 Point influxCreateStatusPoint(Preferences *prefs) {
     Point point("device_status");
-    point.addTag("device", prefs->getString("name"));
+    point.addTag("device", prefs->getString(PREF_K_SYS_NAME));
     point.addField("rssi", WiFi.RSSI());
     point.addField("uptime", millis());
     point.addField("heap_free", ESP.getFreeHeap());
@@ -44,7 +44,7 @@ Point influxCreateStatusPoint(Preferences *prefs) {
 
 Point influxCreatePoint(Preferences *prefs, AranetDevice* device, AranetData *data) {
     Point point("aranet4");
-    point.addTag("device", prefs->getString("name"));
+    point.addTag("device", prefs->getString(PREF_K_SYS_NAME));
     point.addTag("name", device->name);
     point.addField("co2", data->co2);
     point.addField("temperature", data->temperature / 20.0);
