@@ -680,6 +680,9 @@ void NtpSyncTaskCode(void * pvParameters) {
     if (millis() > ntpSyncTime) {
       if (ntpSync()) {
         ntpSyncTime = millis() + (CFG_NTP_SYNC_INTERVAL * 60000);
+      } else {
+        task_sleep(10000); // sleep 10 seconds
+        continue;
       }
     }
     task_sleep(60000); // sleep 1 minute
