@@ -53,8 +53,7 @@ int mqttConnect(MqttClient* client, Preferences* prefs) {
         if (addr != 0) {
             char mqttIpAddr[16];
             ip2str(addr, mqttIpAddr);
-            IPAddress a(10,0,1,22); // TODO: FIXME
-            return client->connect(a, port);
+            return client->connect(mqttIpAddr, port);
         }
     }
     return 0;
