@@ -20,9 +20,11 @@
 
 #define CFG_NTP_SYNC_INTERVAL 60 // (minutes)
 
+#define CFG_DEF_LOGIN_USER "admin"
+#define CFG_DEF_LOGIN_PASSWORD ""
+
 const char *ssid = "Aranet4-ESP32 Bridge";
 const char *password = "Ar@net4Br1dge";
-const char* www_username = "admin";
 
 // influxdb
 #define WRITE_BUFFER_SIZE 30
@@ -33,6 +35,9 @@ const char* www_username = "admin";
 
 // Keystore keys
 #define PREF_K_SYS_NAME       "sys_name"
+
+#define PREF_K_LOGIN_USER     "sys_user"
+#define PREF_K_LOGIN_PASSWORD "sys_password"
 
 #define PREF_K_NTP_URL        "ntp_url"
 

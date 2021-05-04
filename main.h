@@ -24,6 +24,9 @@
 
 const char compile_date[] = __DATE__ " " __TIME__;
 
+char* www_username;
+char* www_password;
+
 // ---------------------------------------------------
 //                 Global variables
 // ---------------------------------------------------
@@ -63,6 +66,7 @@ int configLoad();
 int createInfluxClient();
 bool getBootWiFiMode();
 bool startWebserver();
+bool webAuthenticate();
 bool isManualIp();
 void task_sleep(uint32_t ms);
 void runBtScan();
@@ -351,24 +355,50 @@ bool setupWifiAndWebserver(bool restart = false) {
   return true;
 }
 
+bool webAuthenticate() {
+    if (!www_username) {
+        String str = prefs.getString(PREF_K_LOGIN_USER, CFG_DEF_LOGIN_USER);
+        int len = str.length() + 1;
+        if (www_username) {
+            free(www_username);
+        }
+        www_username = (char*) malloc(len);
+        memcpy(www_username, str.c_str(), len);
+    }
+
+    if (!www_password) {
+        String str = prefs.getString(PREF_K_LOGIN_PASSWORD, CFG_DEF_LOGIN_PASSWORD);
+        int len = str.length() + 1;
+        if (www_password) {
+            free(www_password);
+        }
+        www_password = (char*) malloc(len);
+        memcpy(www_password, str.c_str(), len);
+    }
+
+    Serial.printf("u%s:p:%s\n", www_username, www_password);
+
+    return server.authenticate(www_username, www_password);
+}
+
 bool startWebserver() {
   // setup webserver handles
   server.on("/", HTTP_GET, []() {
-    if (!server.authenticate(www_username, password)) {
+    if (!webAuthenticate()) {
       return server.requestAuthentication();
     }
     server.send(200, "text/html", printHtmlIndex(ar4status, ar4devices.size));
   });
 
   server.on("/settings", HTTP_GET, []() {
-    if (!server.authenticate(www_username, password)) {
+    if (!webAuthenticate()) {
       return server.requestAuthentication();
     }
     server.send(200, "text/html", printHtmlConfig(&prefs));
   });
 
   server.on("/settings", HTTP_POST, []() {
-    if (!server.authenticate(www_username, password)) {
+    if (!webAuthenticate()) {
       return server.requestAuthentication();
     }
 
@@ -446,13 +476,13 @@ bool startWebserver() {
   });
 
   server.on("/data", HTTP_GET, []() {
-    if (!server.authenticate(www_username, password)) {
+    if (!webAuthenticate()) {
       return server.requestAuthentication();
     }
     server.send(200, "text/plain", printData());
   });
   server.on("/scan", HTTP_GET, []() {
-    if (!server.authenticate(www_username, password)) {
+    if (!webAuthenticate()) {
       return server.requestAuthentication();
     }
 
@@ -462,7 +492,7 @@ bool startWebserver() {
   });
 
   server.on("/scanresults", HTTP_GET, []() {
-    if (!server.authenticate(www_username, password)) {
+    if (!webAuthenticate()) {
       return server.requestAuthentication();
     }
     scanBlockTimeout = millis() + 5000;
@@ -470,7 +500,7 @@ bool startWebserver() {
   });
 
   server.on("/pair", HTTP_POST, []() {
-    if (!server.authenticate(www_username, password)) {
+    if (!webAuthenticate()) {
       return server.requestAuthentication();
     }
 
@@ -562,7 +592,7 @@ bool startWebserver() {
   });
 
   server.on("/clrbnd", HTTP_GET, []() {
-    if (!server.authenticate(www_username, password)) {
+    if (!webAuthenticate()) {
       return server.requestAuthentication();
     }
     ble_store_clear();
@@ -571,7 +601,7 @@ bool startWebserver() {
   });
 
   server.on("/restart", HTTP_GET, []() {
-    if (!server.authenticate(www_username, password)) {
+    if (!webAuthenticate()) {
       return server.requestAuthentication();
     }
     server.send(200, "text/html", "restarting...");
