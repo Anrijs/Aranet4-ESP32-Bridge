@@ -177,10 +177,5 @@ void loop() {
     }
     influxFlushBuffer(influxClient);
 
-    Serial.print("mem: ");
-    Serial.print(ESP.getFreeHeap());
-    Serial.print(" / ");
-    Serial.println(ESP.getHeapSize());
-
     task_sleep(2500);
 }
