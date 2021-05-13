@@ -22,6 +22,7 @@ typedef struct AranetDeviceStatus {
     AranetData data;
     long updated = 0;
     uint16_t pending = 0;
+    bool mqttReported = false;
 };
 
 #endif

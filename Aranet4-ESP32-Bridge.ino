@@ -81,7 +81,7 @@ void loop() {
         AranetDevice* d = d = s->device;
 
         long expectedUpdateAt = s->updated + ((s->data.interval - s->data.ago) * 1000);
-        if(millis() < expectedUpdateAt) continue;
+        if(millis() < expectedUpdateAt && s->updated > 0) continue;
 
         Serial.print("Connecting to ");
         Serial.println(d->name);
@@ -100,7 +100,7 @@ void loop() {
                 int newRecords = s->pending;
                 if (newRecords == 0) newRecords = (((mStart - s->updated) / 1000) / s->data.interval) - 1;
 
-                if (s->updated > 0 && newRecords > 0) {
+                if (s->updated != 0 && newRecords > 0) {
                     Serial.printf("I see missed %i records\n", newRecords);
                     AranetDataCompact* logs = (AranetDataCompact*) malloc(sizeof(AranetDataCompact) * CFG_HISTORY_CHUNK_SIZE);
                     AranetData adata;
@@ -160,6 +160,10 @@ void loop() {
                 Serial.print("Uploading data ...");
                 Point pt = influxCreatePoint(&prefs, d, &s->data);
                 influxSendPoint(influxClient, pt);
+                if (!s->mqttReported) {
+                    mqttSendConfig(&mqttClient, &prefs, d);
+                    s->mqttReported = true;
+                }
                 mqttSendPoint(&mqttClient, &prefs, d, &s->data);
             } else {
                 Serial.print("Read failed.");       

@@ -10,6 +10,9 @@
 #include "Aranet4.h"
 
 
+const char* mqttConfigTemplate = "{\"device_class\": \"%s\", \"name\": \"%s %s\", \"state_topic\": \"%s\", \"unit_of_measurement\": \"%s\", \"uniq_id\":\"sensor.%s\"}";
+
+
 String mqttGetDeviceId() {
     byte mac[6];
     WiFi.macAddress(mac);
@@ -65,7 +68,7 @@ int mqttConnect(MqttClient* client, Preferences* prefs) {
 void mqttSendPoint(MqttClient* client, Preferences *prefs, AranetDevice* device, AranetData *data) {
     if (!client->connected()) mqttConnect(client, prefs);
 
-    String topic = "aranet4bridge/" + mqttGetAranetName(device);
+    String topic = "aranet4bridge/sensor/" + mqttGetAranetName(device);
 
     client->beginMessage(topic + "/co2");
     client->print(data->co2);
@@ -87,5 +90,46 @@ void mqttSendPoint(MqttClient* client, Preferences *prefs, AranetDevice* device,
     client->print(data->battery);
     client->endMessage();
 }
+
+/*
+    Send home asssistant compatible config to mqtt server
+*/
+
+void mqttSendConfig(MqttClient* client, Preferences *prefs, AranetDevice* device) {
+    if (!client->connected()) mqttConnect(client, prefs);
+
+    String deviceNameStr = mqttGetAranetName(device);
+    String topic = "aranet4bridge/sensor/" + deviceNameStr;
+    const char* deviceName = deviceNameStr.c_str();
+
+
+    char buf[256];
+
+    sprintf(buf, mqttConfigTemplate, "carbon_dioxide", deviceName, "CO2", (topic + "/co2").c_str(), "ppm", (deviceNameStr + ".co2").c_str(),(deviceNameStr + ".co2").c_str());
+    client->beginMessage(topic + "-co2/config");
+    client->print(buf);
+    client->endMessage();
+
+    sprintf(buf, mqttConfigTemplate, "temperature", deviceName, "Temperature", (topic + "/temperature").c_str(), "C", (deviceNameStr + ".temperature").c_str(),(deviceNameStr + ".temperature").c_str());
+    client->beginMessage(topic + "-t/config");
+    client->print(buf);
+    client->endMessage();
+
+    sprintf(buf, mqttConfigTemplate, "pressure", deviceName, "Pressure", (topic + "/pressure").c_str(), "hPa", (deviceNameStr + ".pressure").c_str(),(deviceNameStr + ".pressure").c_str());
+    client->beginMessage(topic + "-p/config");
+    client->print(buf);
+    client->endMessage();
+
+    sprintf(buf, mqttConfigTemplate, "humidity", deviceName, "Humidity", (topic + "/humidity").c_str(), "%", (deviceNameStr + ".humidity").c_str(),(deviceNameStr + ".humidity").c_str());
+    client->beginMessage(topic + "-h/config");
+    client->print(buf);
+    client->endMessage();
+
+    sprintf(buf, mqttConfigTemplate, "battery", deviceName, "Battery", (topic + "/battery").c_str(), "%", (deviceNameStr + ".battery").c_str(), (deviceNameStr + ".battery").c_str());
+    client->beginMessage(topic + "-b/config");
+    client->print(buf);
+    client->endMessage();
+}
+
 
 #endif
