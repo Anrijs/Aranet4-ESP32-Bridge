@@ -335,7 +335,7 @@ void startWebserverTask() {
 bool setupWifiAndWebserver(bool restart = false) {
   if (restart) {
     WiFi.disconnect();
-    server.stop();
+    server.close();
   }
 
   if (setupWiFi()) {
@@ -350,6 +350,10 @@ bool setupWifiAndWebserver(bool restart = false) {
   } else {
     Serial.println("Failed to start WiFi");
     return false;
+  }
+
+  if (!restart) {
+    startWebserverTask();
   }
 
   return true;
@@ -616,8 +620,6 @@ bool startWebserver() {
 
   server.onNotFound(handleNotFound);
   server.begin();
-
-  startWebserverTask();
 
   return true;
 }
