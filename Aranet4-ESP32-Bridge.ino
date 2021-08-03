@@ -39,8 +39,6 @@ void setup() {
     }
 
     createInfluxClient();
-    setupMqttClient();
-
     startNtpSyncTask();
 
     // Set up bluettoth security and callbacks
