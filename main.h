@@ -58,6 +58,7 @@ bool isAp = true;
 long wifiConnectedAt = 0;
 long scanBlockTimeout = 0;
 long ntpSyncTime = 0;
+uint8_t ntpSyncFails = 0;
 
 // ---------------------------------------------------
 //                 Function declarations
@@ -475,6 +476,7 @@ bool startWebserver() {
 
     createInfluxClient();
     ntpSyncTime = 0; // sync now
+    ntpSyncFails = 0;
 
     server.send(200, "text/html", printHtmlConfig(&prefs, true));
   });
@@ -641,7 +643,7 @@ void runBtScan() {
 }
 
 void BtScanTaskCode(void* pvParameters) {
-  Serial.println("Pairing BT device");
+  Serial.println("Scanning BT devices");
 
   pScan->start(CFG_BT_SCAN_DURATION);
   vTaskDelete(BtScanTask);
@@ -670,7 +672,7 @@ bool ntpSync() {
   configTime(0, 0, prefs.getString(PREF_K_NTP_URL).c_str());
   struct tm timeinfo;
   if (!getLocalTime(&timeinfo)) {
-    Serial.println("NTP: Failed to obtain time");
+    Serial.printf("NTP: Failed to obtain time (%d)\n",ntpSyncFails);
     return false;
   }
   Serial.println(&timeinfo, "NTP: %A, %B %d %Y %H:%M:%S");
@@ -682,8 +684,14 @@ void NtpSyncTaskCode(void * pvParameters) {
     if (millis() > ntpSyncTime) {
       if (ntpSync()) {
         ntpSyncTime = millis() + (CFG_NTP_SYNC_INTERVAL * 60000);
+        ntpSyncFails = 0;
       } else {
-        task_sleep(10000); // sleep 10 seconds
+        if (ntpSyncFails < 2) task_sleep(10000); // 10s
+        else if (ntpSyncFails < 3) task_sleep(30000); //60s
+        else if (ntpSyncFails < 4) task_sleep(60000); //60s
+        else task_sleep(300000); //5m
+        ntpSyncFails++;
+         // sleep 10 seconds
         continue;
       }
     }
