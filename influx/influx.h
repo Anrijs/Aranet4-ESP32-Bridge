@@ -12,20 +12,24 @@
 InfluxDBClient* influxCreateClient(Preferences *prefs) {
   InfluxDBClient* influxClient = nullptr;
 
-  if (prefs->getString("url").length() < 1 || prefs->getString("bucket").length() < 1) {
+  if (prefs->getString(PREF_K_INFLUX_URL).length() < 1 || prefs->getString(PREF_K_INFLUX_BUCKET).length() < 1) {
       return influxClient;
   }
 
-  if (prefs->getUChar("dbver") == 2) {
+  if (prefs->getUChar(PREF_K_INFLUX_DBVER) == 2) {
     influxClient = new InfluxDBClient(
-        prefs->getString("url").c_str(),
-        prefs->getString("organisation").c_str(),
-        prefs->getString("bucket").c_str(),
-        prefs->getString("token").c_str(),
+        prefs->getString(PREF_K_INFLUX_URL).c_str(),
+        prefs->getString(PREF_K_INFLUX_ORG).c_str(),
+        prefs->getString(PREF_K_INFLUX_BUCKET).c_str(),
+        prefs->getString(PREF_K_INFLUX_TOKEN).c_str(),
         InfluxDbCloud2CACert
     );
   } else {
-    influxClient = new InfluxDBClient(prefs->getString("url").c_str(), prefs->getString("bucket").c_str());
+    Serial.print("InfluxDB: ");
+    Serial.print(prefs->getString(PREF_K_INFLUX_URL));
+    Serial.print(" -> ");
+    Serial.println(prefs->getString(PREF_K_INFLUX_BUCKET));
+    influxClient = new InfluxDBClient(prefs->getString(PREF_K_INFLUX_URL).c_str(), prefs->getString(PREF_K_INFLUX_BUCKET).c_str());
   }
 
   influxClient->setWriteOptions(WriteOptions().writePrecision(WRITE_PRECISION).bufferSize(WRITE_BUFFER_SIZE));
@@ -63,10 +67,11 @@ Point influxCreatePointWithTimestamp(Preferences *prefs, AranetDevice* device, A
     return point;
 }
 
-void influxSendPoint(InfluxDBClient *influxClient, Point pt) {
+bool influxSendPoint(InfluxDBClient *influxClient, Point pt) {
     if (influxClient != nullptr) {
-        influxClient->writePoint(pt);
+        return influxClient->writePoint(pt);
     }
+    return false;
 }
 
 void influxFlushBuffer(InfluxDBClient *influxClient) {
