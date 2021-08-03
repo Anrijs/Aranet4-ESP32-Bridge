@@ -615,6 +615,34 @@ bool startWebserver() {
     ESP.restart();
   });
 
+  server.on("/force", HTTP_GET, []() {
+    if (!webAuthenticate()) {
+      return server.requestAuthentication();
+    }
+
+    uint8_t id = 0xFF;
+    if (server.hasArg("id")) {
+      id = server.arg("id").toInt();
+    }
+
+    uint16_t count = 2048; // max
+    if (server.hasArg("count")) {
+      count = server.arg("count").toInt();
+    }
+
+    char buf[40];
+    sprintf(buf, "Will download %u records...", count);
+
+    server.send(200, "text/html", buf);
+
+    for (int j=0; j<ar4devices.size; j++) {
+      if (id == 0xFF || id == j) {
+        AranetDeviceStatus* s = s = &ar4status[j];
+        s->pending = count;
+      }
+    }
+  });
+
   // Image resources
   // server static content from images folder with 10 minute cache
   server.serveStatic("/img/", SPIFFS, "/img/", "max-age=86400"); // 1 day cache
