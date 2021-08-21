@@ -660,13 +660,14 @@ void task_sleep(uint32_t ms) {
 
 void runBtScan() {
   if (!pScan->isScanning()) {
-    xTaskCreate(
-      BtScanTaskCode,   /* Task function. */
-      "BtScanTask",     /* name of task. */
-      10000,            /* Stack size of task */
-      NULL,             /* parameter of the task */
-      1,                /* priority of the task */
-      &BtScanTask);     /* Task handle to keep track of created task */
+    xTaskCreatePinnedToCore(
+      BtScanTaskCode,  /* Task function. */
+      "BtScanTask",    /* name of task. */
+      10000,           /* Stack size of task */
+      NULL,            /* parameter of the task */
+      3,               /* priority of the task */
+      &BtScanTask,     /* Task handle to keep track of created task */
+      0);              /* pin task to core 0 */
   }
 }
 

@@ -157,6 +157,8 @@ void loop() {
                                     adata.interval = s->data.interval;
 
                                     int totalLogs = ar4.getTotalReadings();
+                                    if (newRecords > totalLogs) newRecords = totalLogs;
+
                                     int start = totalLogs - newRecords;
                                     if (start < 1) start = 1;
 
@@ -180,7 +182,7 @@ void loop() {
                                             s->pending = newRecords;
                                         }
 
-                                        Serial.printf("Sending %i logs\n", logCount);
+                                        Serial.printf("Sending %i logs. %i remm\n", logCount, newRecords);
 
                                         for (uint16_t k = 0; k < logCount; k++) {
                                             if (k % 10 == 0) {
@@ -228,8 +230,9 @@ void loop() {
                     }
                 }
             }
+            Serial.println("Waiting for next scan");
         }
-        Serial.printf("Waiting for next scan\n");
+        Serial.print(".");
     }
     influxFlushBuffer(influxClient);
     task_sleep(5000);
