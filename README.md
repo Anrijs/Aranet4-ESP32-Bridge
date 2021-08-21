@@ -7,9 +7,8 @@ Connect your Aranet4 to ESP32 and view measurements in browser or send them to I
 	* [Aranet4-ESP32](https://github.com/Anrijs/Aranet4-ESP32)
 	* [InfluxDB-Client-for-Arduino](https://github.com/tobiasschuerg/InfluxDB-Client-for-Arduino)
 	* [Arduino Mqtt Client](https://github.com/arduino-libraries/ArduinoMqttClient/)
-3. Change Tools->Partition scheme to`No OTA (2MB APP/2MB SPIFFS)`
-4. Compile and flash ESP32
-5. For image resources SPIFFS also needs to be flashed. Install [arduino-esp32fs-plugin](https://github.com/me-no-dev/arduino-esp32fs-plugin) and after restarting Arduino IDE use Tools->ESP32 Sketch Data Upload
+3. Compile and flash ESP32
+4. For image resources SPIFFS also needs to be flashed. Install [arduino-esp32fs-plugin](https://github.com/me-no-dev/arduino-esp32fs-plugin) and after restarting Arduino IDE use Tools->ESP32 Sketch Data Upload
 
 ## Usage
 1. On first boot, Wi-Fi access point will be created. SSID by default is `Aranet4-ESP32 Bridge` and password: `Ar@net4Br1dge`. You can change these in `config.h` file.

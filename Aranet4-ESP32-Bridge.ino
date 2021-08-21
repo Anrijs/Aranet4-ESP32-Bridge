@@ -1,13 +1,11 @@
 /*
- *  Bluetooth + WiFi stack takes a lot of space.
- *  Most ESP32 boards uses 4MB SPI Flash and You will need to change 
- *  partition scheme to [No OTA (2MB APP/2MB SPIFFS)]
+ *  Bluetooth + WiFi stack takes a lot of space...
  *  
  *  Upload files to SPIFFS using https://github.com/me-no-dev/arduino-esp32fs-plugin/releases/
  *  
  *  Also make sure esp32 board library is up to date https://github.com/espressif/arduino-esp32
  *  As of writing this 1.0.6 is latest and tested.
- *  Upgrading from 1.0.4 fixed some BLE stack DRAM issues
+ *  Upgrading from 1.0.4 fixed some BLE stack RAM issues
  */
 
 #include "main.h"
@@ -169,7 +167,7 @@ void loop() {
                                         uint16_t logCount = CFG_HISTORY_CHUNK_SIZE;
                                         if (newRecords < CFG_HISTORY_CHUNK_SIZE) logCount = newRecords;
 
-                                        Serial.printf("Will read %i results from %i\n", logCount, start);
+                                        Serial.printf("Will read %i results from %i @ %i\n", logCount, start, NimBLEDevice::getMTU());
                                         ar4.getHistory(start, logCount, logs);
 
                                         // Sometimes aranet might disconect, before full history is received
