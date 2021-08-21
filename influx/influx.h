@@ -32,7 +32,7 @@ InfluxDBClient* influxCreateClient(Preferences *prefs) {
     influxClient = new InfluxDBClient(prefs->getString(PREF_K_INFLUX_URL).c_str(), prefs->getString(PREF_K_INFLUX_BUCKET).c_str());
   }
 
-  influxClient->setWriteOptions(WriteOptions().writePrecision(WRITE_PRECISION).bufferSize(WRITE_BUFFER_SIZE));
+  influxClient->setWriteOptions(WriteOptions().writePrecision(WRITE_PRECISION).batchSize(MAX_BATCH_SIZE).bufferSize(WRITE_BUFFER_SIZE));
   return influxClient;
 }
 

@@ -29,7 +29,8 @@ const char *ssid = "Aranet4-ESP32 Bridge";
 const char *password = "Ar@net4Br1dge";
 
 // influxdb
-#define WRITE_BUFFER_SIZE 30
+#define WRITE_BUFFER_SIZE 120
+#define MAX_BATCH_SIZE 60
 #define WRITE_PRECISION WritePrecision::S
 
 // mqtt
