@@ -33,6 +33,14 @@ const char *password = "Ar@net4Br1dge";
 #define MAX_BATCH_SIZE 60
 #define WRITE_PRECISION WritePrecision::S
 
+enum ILog {
+  NONE = 0,
+  ERROR,
+  WARNING,
+  INFO,
+  DEBUG
+};
+
 // mqtt
 #define CFG_DEF_MQTT_PORT 1883
 
@@ -58,6 +66,7 @@ const char *password = "Ar@net4Br1dge";
 #define PREF_K_INFLUX_TOKEN   "influx_token"
 #define PREF_K_INFLUX_BUCKET  "influx_bucket"
 #define PREF_K_INFLUX_DBVER   "influx_dbver"
+#define PREF_K_INFLUX_LOG     "influx_log"
 
 #define PREF_K_MQTT_SERVER    "mqtt_server_ip"
 #define PREF_K_MQTT_PORT      "mqtt_port"

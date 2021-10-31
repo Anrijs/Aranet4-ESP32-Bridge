@@ -347,7 +347,8 @@ String printHtmlConfig(Preferences* prefs, bool updated = false) {
                                + printHtmlTextInput(PREF_K_INFLUX_ORG, "Organisation", prefs->getString(PREF_K_INFLUX_ORG), 16)
                                + printHtmlTextInput(PREF_K_INFLUX_TOKEN, "Token", prefs->getString(PREF_K_INFLUX_TOKEN), 128)
                                + printHtmlTextInput(PREF_K_INFLUX_BUCKET, "Bucket/Database", prefs->getString(PREF_K_INFLUX_BUCKET), 32)
-                               + printHtmlCheckboxInput(PREF_K_INFLUX_DBVER, "InfluxDB v2", prefs->getUChar(PREF_K_INFLUX_DBVER) == 2));
+                               + printHtmlCheckboxInput(PREF_K_INFLUX_DBVER, "InfluxDB v2", prefs->getUChar(PREF_K_INFLUX_DBVER) == 2)
+                               + printHtmlNumberInput(PREF_K_INFLUX_LOG, "Log level", prefs->getUShort(PREF_K_INFLUX_LOG), 4));
 
   page += printCard("MQTT Client", printHtmlTextInput(PREF_K_MQTT_SERVER, "Server IP address", mqttIpAddr, 15)
                                + printHtmlNumberInput(PREF_K_MQTT_PORT, "Port", prefs->getUShort(PREF_K_MQTT_PORT), 65535)

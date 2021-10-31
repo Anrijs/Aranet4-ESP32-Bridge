@@ -9,6 +9,8 @@
 #include <InfluxDbCloud.h>
 #include "Aranet4.h"
 
+const char ilog_tags[] = {'A', 'E', 'W', 'I', 'D'};
+
 InfluxDBClient* influxCreateClient(Preferences *prefs) {
   InfluxDBClient* influxClient = nullptr;
 
@@ -78,6 +80,30 @@ void influxFlushBuffer(InfluxDBClient *influxClient) {
     if (influxClient != nullptr && !influxClient->isBufferEmpty()) {
         influxClient->flushBuffer();
     }
+}
+
+bool influxSendLog(InfluxDBClient *influxClient, Preferences *prefs, String str, ILog level) {
+    uint16_t lvl = prefs->getUShort(PREF_K_INFLUX_LOG, 0);
+
+    Serial.printf("%c: ", ilog_tags[(uint16_t) level]);
+    Serial.println(str);
+
+    if (lvl > 0 && lvl >= level) {
+        if (str.length() > 0) {
+            if (influxClient != nullptr) {
+                Point point("log");
+                point.addTag("device", prefs->getString(PREF_K_SYS_NAME));
+                point.addField("message", str);
+                point.addField("level", (uint16_t) level);
+                point.setTime(WritePrecision::NoTime); // no time
+
+                // bypass timestamp
+                String line = influxClient->pointToLineProtocol(point);
+                return influxClient->writeRecord(line);
+            }
+        }
+    }
+    return false;
 }
 
 #endif // __INFLUX_H

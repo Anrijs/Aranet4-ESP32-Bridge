@@ -6,6 +6,7 @@
 #include <WebServer.h>
 #include <Preferences.h>
 #include "SPIFFS.h"
+#include <rom/rtc.h>
 //#include "esp_task_wdt.h"
 
 #include "vector"
@@ -48,6 +49,7 @@ MqttClient mqttClient(espClient);
 TaskHandle_t BtScanTask;
 TaskHandle_t WiFiTask;
 TaskHandle_t NtpSyncTask;
+TimerHandle_t WatchdogTimer;
 
 bool wifiTaskRunning = false;
 
@@ -72,7 +74,12 @@ bool isManualIp();
 void task_sleep(uint32_t ms);
 void runBtScan();
 void startNtpSyncTask();
+void log(String msg, ILog level);
 bool ntpSync();
+
+void setupWatchdog();
+void startWatchdog(uint32_t period);
+bool cancelWatchdog();
 
 void BtScanTaskCode(void* pvParameters);
 void WiFiTaskCode(void* pvParameters);
@@ -463,6 +470,9 @@ bool startWebserver() {
     if (server.hasArg(PREF_K_INFLUX_BUCKET)) {
       prefs.putString(PREF_K_INFLUX_BUCKET, server.arg(PREF_K_INFLUX_BUCKET));
     }
+    if (server.hasArg(PREF_K_INFLUX_LOG))     {
+      prefs.putUShort(PREF_K_INFLUX_LOG, server.arg(PREF_K_INFLUX_LOG).toInt());
+    }
     prefs.putUChar(PREF_K_INFLUX_DBVER, server.hasArg(PREF_K_INFLUX_DBVER) ? 2 : 1);
 
     // MQTT
@@ -749,5 +759,83 @@ void WiFiTaskCode(void * pvParameters) {
     task_sleep(1);
   }
 }
+
+void restart(TimerHandle_t xTimer) {
+  log("watchdog: timed out. Restarting ESP32...", ILog::ERROR);
+  ESP.restart();
+}
+
+int wdId = 1;
+uint32_t period = 30;
+
+void setupWatchdog() {
+  if (!WatchdogTimer) {
+    WatchdogTimer = xTimerCreate("WatchdogTimer", pdMS_TO_TICKS(period * 1000), pdTRUE, ( void * )wdId, &restart);
+  }
+}
+
+void startWatchdog(uint32_t p) {
+  if (p != period) {
+    period = p;
+    xTimerChangePeriod(WatchdogTimer, pdMS_TO_TICKS(period * 1000), pdMS_TO_TICKS(1000));
+  }
+  if (xTimerIsTimerActive(WatchdogTimer)) {
+    xTimerReset(WatchdogTimer, pdMS_TO_TICKS(1000));
+  } else {
+    xTimerStart(WatchdogTimer, pdMS_TO_TICKS(1000));
+  }
+}
+
+bool cancelWatchdog() {
+  if (xTimerStop(WatchdogTimer, pdMS_TO_TICKS(1000)) == pdPASS) {
+    return true;
+  }
+  return false;
+}
+
+void log(String msg, ILog level) {
+  influxSendLog(influxClient, &prefs, msg, level);
+}
+
+char* rst_reasons[] = {
+    "POWERON_RESET",          /**<1, Vbat power on reset*/
+    "SW_RESET",               /**<3, Software reset digital core*/
+    "OWDT_RESET",             /**<4, Legacy watch dog reset digital core*/
+    "DEEPSLEEP_RESET",        /**<5, Deep Sleep reset digital core*/
+    "SDIO_RESET",             /**<6, Reset by SLC module, reset digital core*/
+    "TG0WDT_SYS_RESET",       /**<7, Timer Group0 Watch dog reset digital core*/
+    "TG1WDT_SYS_RESET",       /**<8, Timer Group1 Watch dog reset digital core*/
+    "RTCWDT_SYS_RESET",       /**<9, RTC Watch dog Reset digital core*/
+    "INTRUSION_RESET",       /**<10, Instrusion tested to reset CPU*/
+    "TGWDT_CPU_RESET",       /**<11, Time Group reset CPU*/
+    "SW_CPU_RESET",          /**<12, Software reset CPU*/
+    "RTCWDT_CPU_RESET",      /**<13, RTC Watch dog Reset CPU*/
+    "EXT_CPU_RESET",         /**<14, for APP CPU, reseted by PRO CPU*/
+    "RTCWDT_BROWN_OUT_RESET",/**<15, Reset when the vdd voltage is not stable*/
+    "RTCWDT_RTC_RESET",      /**<16, RTC Watch dog reset digital core and rtc module*/
+    "NO_MEAN"
+};
+
+char* getResetReason(RESET_REASON reason) {
+  switch (reason) {
+    case 1 : return rst_reasons[0];   /**<1, Vbat power on reset*/
+    case 3 : return rst_reasons[1];   /**<3, Software reset digital core*/
+    case 4 : return rst_reasons[2];   /**<4, Legacy watch dog reset digital core*/
+    case 5 : return rst_reasons[3];   /**<5, Deep Sleep reset digital core*/
+    case 6 : return rst_reasons[4];   /**<6, Reset by SLC module, reset digital core*/
+    case 7 : return rst_reasons[5];   /**<7, Timer Group0 Watch dog reset digital core*/
+    case 8 : return rst_reasons[6];   /**<8, Timer Group1 Watch dog reset digital core*/
+    case 9 : return rst_reasons[7];   /**<9, RTC Watch dog Reset digital core*/
+    case 10 : return rst_reasons[8];  /**<10, Instrusion tested to reset CPU*/
+    case 11 : return rst_reasons[9];  /**<11, Time Group reset CPU*/
+    case 12 : return rst_reasons[10]; /**<12, Software reset CPU*/
+    case 13 : return rst_reasons[11]; /**<13, RTC Watch dog Reset CPU*/
+    case 14 : return rst_reasons[12]; /**<14, for APP CPU, reseted by PRO CPU*/
+    case 15 : return rst_reasons[13]; /**<15, Reset when the vdd voltage is not stable*/
+    case 16 : return rst_reasons[14]; /**<16, RTC Watch dog reset digital core and rtc module*/
+    default : return rst_reasons[15];
+  }
+}
+
 
 #endif

@@ -37,6 +37,12 @@ void setup() {
 
     createInfluxClient();
 
+    char* rstReason0 = getResetReason(rtc_get_reset_reason(0));
+    char* rstReason1 = getResetReason(rtc_get_reset_reason(1));
+
+    String resetMsg = String("CPU0: ") + String(rstReason0) + String(", CPU1: ") + String(rstReason1);
+    log(resetMsg, ILog::INFO);
+
     startNtpSyncTask();
 
     // Set up bluettoth security and callbacks
@@ -48,6 +54,8 @@ void setup() {
     esp_task_wdt_init(15, false);
     enableCore0WDT();
     enableCore1WDT();
+
+    setupWatchdog();
 }
 
 void loop() {
@@ -114,6 +122,8 @@ void loop() {
 
                 bool found = false;
 
+                startWatchdog(30);
+
                 for (int j=0; j<count; j++) {
                     AranetDeviceStatus* s = s = &ar4status[j];
                     AranetDevice* d = d = s->device;
@@ -166,6 +176,10 @@ void loop() {
                                     while (newRecords > 0 && ar4.isConnected()) {
                                         uint16_t logCount = CFG_HISTORY_CHUNK_SIZE;
                                         if (newRecords < CFG_HISTORY_CHUNK_SIZE) logCount = newRecords;
+
+                                        // reset watchdog (1s per log, at least 30s)
+                                        cancelWatchdog();
+                                        startWatchdog(max((int) logCount, 30));
 
                                         Serial.printf("Will read %i results from %i @ %i\n", logCount, start, NimBLEDevice::getMTU());
                                         ar4.getHistory(start, logCount, logs);
@@ -227,6 +241,8 @@ void loop() {
                         break;
                     }
                 }
+
+                cancelWatchdog();
             }
             Serial.println("Waiting for next scan");
         }
