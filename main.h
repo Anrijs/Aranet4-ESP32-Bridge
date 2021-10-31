@@ -150,6 +150,11 @@ int configLoad() {
     return 0;
   }
 
+  if (!prefs.getBool(PREF_K_CFG_INIT, false)) {
+    wipeStoredDevices();
+    prefs.putBool(PREF_K_CFG_INIT, true);
+  }
+
   return 1;
 }
 

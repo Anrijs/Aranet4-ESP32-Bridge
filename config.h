@@ -64,4 +64,6 @@ const char *password = "Ar@net4Br1dge";
 #define PREF_K_MQTT_USER      "mqtt_user"
 #define PREF_K_MQTT_PASSWORD  "mqtt_password"
 
+#define PREF_K_CFG_INIT       "cfg_init"
+
 #endif
