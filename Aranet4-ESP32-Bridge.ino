@@ -49,6 +49,8 @@ void setup() {
     Aranet4::init();
     ar4.setConnectTimeout(CFG_BT_CONNECT_TIMEOUT);
 
+    pScan->setActiveScan(true);
+
     delay(500);
 
     esp_task_wdt_init(15, false);
