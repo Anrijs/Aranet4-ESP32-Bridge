@@ -45,6 +45,8 @@ InfluxDBClient* influxClient = nullptr;
 WiFiClient espClient;
 MqttClient mqttClient(espClient);
 
+AranetDataCompact logs[CFG_HISTORY_CHUNK_SIZE];
+
 // RTOS
 TaskHandle_t BtScanTask;
 TaskHandle_t WiFiTask;

@@ -195,7 +195,6 @@ void loop() {
 
                             if (s->updated != 0 && newRecords > 0) {
                                 Serial.printf("I see missed %i records\n", newRecords);
-                                AranetDataCompact* logs = (AranetDataCompact*) malloc(sizeof(AranetDataCompact) * CFG_HISTORY_CHUNK_SIZE);
 
                                 bool readHist = true;
 
