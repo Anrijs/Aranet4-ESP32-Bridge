@@ -109,7 +109,18 @@ void loop() {
             for (int i = 0; i < results.getCount(); i++) {
                 NimBLEAdvertisedDevice adv = results.getDevice(i);
 
-                if (adv.getName().find("Aranet") == std::string::npos) {
+                std::string strManufacturerData = adv.getManufacturerData();
+
+                uint16_t manufacturerId = 0;
+                uint8_t cManufacturerData[100];
+                int cLength = strManufacturerData.length();
+
+                strManufacturerData.copy((char *)cManufacturerData, cLength, 0);
+                memcpy(&manufacturerId, (void*) cManufacturerData, sizeof(manufacturerId));
+
+                bool hasManufacturerData = manufacturerId == 0x0702 && cLength >= 22;
+
+                if (adv.getName().find("Aranet") == std::string::npos && !hasManufacturerData) {
                     continue;
                 }
 
@@ -140,27 +151,63 @@ void loop() {
 
                         found = true;
 
-                        // read data
-                        Serial.print("Connecting to ");
-                        Serial.println(d->name);
-
+                        // disconenct from old
                         long disconnectTimeout = millis() + 1000;
                         while (ar4.isConnected() && disconnectTimeout > millis()) task_sleep(10);
 
-                        ar4_err_t status = ar4.connect(d->addr);
+                        bool dataOk = false;
+                        if (hasManufacturerData) {
+                            // read from beacon
+                            Serial.print("Read from beacon data ");
+                            Serial.println(d->name);
 
-                        if (status == AR4_OK) {
-                            s->data = ar4.getCurrentReadings();
+                            // todo: prc
+                            //s->data = //copy from mf data
+                            // memcpy(s->data
+
+                            s->data = AranetData();
+                            uint16_t len = sizeof(AranetData);
+                            memcpy(&s->data, (void*) cManufacturerData + 10, len);
+                            dataOk = true;
+                        } else {
+                            // read from gatt
+                            Serial.print("Connecting to ");
+                            Serial.println(d->name);
+
+                            ar4_err_t status = ar4.connect(d->addr);
+
+                            if (status == AR4_OK) {
+                                s->data = ar4.getCurrentReadings();
+                                dataOk = ar4.getStatus() == AR4_OK;
+                            } else {
+                                Serial.printf("Aranet4 connect failed: (%i)\n", status);
+                                break;
+                            }
+                        }
+
+                        if (dataOk && s->data.co2 != 0) {
                             Serial.printf("  CO2: %i\n  T:  %.2f\n", s->data.co2, s->data.temperature / 20.0);
-                            if (ar4.getStatus() == AR4_OK && s->data.co2 != 0) {
-                                // Check how many records might have been skipped
-                                long mStart = millis();
-                                int newRecords = s->pending;
-                                if (newRecords == 0) newRecords = (((mStart - s->updated) / 1000) / s->data.interval) - 1;
 
-                                if (s->updated != 0 && newRecords > 0) {
-                                    Serial.printf("I see missed %i records\n", newRecords);
-                                    AranetDataCompact* logs = (AranetDataCompact*) malloc(sizeof(AranetDataCompact) * CFG_HISTORY_CHUNK_SIZE);
+                            // Check how many records might have been skipped
+                            long mStart = millis();
+                            int newRecords = s->pending;
+                            if (newRecords == 0) newRecords = (((mStart - s->updated) / 1000) / s->data.interval) - 1;
+
+                            if (s->updated != 0 && newRecords > 0) {
+                                Serial.printf("I see missed %i records\n", newRecords);
+                                AranetDataCompact* logs = (AranetDataCompact*) malloc(sizeof(AranetDataCompact) * CFG_HISTORY_CHUNK_SIZE);
+
+                                bool readHist = true;
+
+                                // connect if was using manufacurer data
+                                if (!ar4.isConnected()) {
+                                  ar4_err_t status = ar4.connect(d->addr);
+                                    if (status != AR4_OK) {
+                                        readHist = false;
+                                    }
+                                }
+
+                                if (readHist) {
                                     AranetData adata;
                                     adata.ago = 0;
                                     adata.battery = s->data.battery;
@@ -204,6 +251,7 @@ void loop() {
                                             } else {
                                                 Serial.print(".");
                                             }
+
                                             adata.co2 = logs[k].co2;
                                             adata.temperature = logs[k].temperature;
                                             adata.pressure = logs[k].pressure;
@@ -216,31 +264,32 @@ void loop() {
                                         Serial.println();
                                         influxFlushBuffer(influxClient);
                                     }
+                                } else {
+                                    Serial.println("Couldn't read history");
                                 }
-
-                                s->updated = millis();
-
-                                Serial.print("Uploading data... ");
-                                Point pt = influxCreatePoint(&prefs, d, &s->data);
-                                if (!influxSendPoint(influxClient, pt)) {
-                                    Serial.println(" Upload failed.");
-                                }
-                                if (!s->mqttReported) {
-                                    mqttSendConfig(&mqttClient, &prefs, d);
-                                    s->mqttReported = true;
-                                }
-                                mqttSendPoint(&mqttClient, &prefs, d, &s->data);
-                            } else {
-                                Serial.print("Read failed.");
                             }
-                            influxFlushBuffer(influxClient);
-                        } else {
-                            Serial.printf("Aranet4 connect failed: (%i)\n", status);
-                        }
 
+                            s->updated = millis();
+
+                            Serial.print("Uploading data... ");
+                            Point pt = influxCreatePoint(&prefs, d, &s->data);
+                            if (!influxSendPoint(influxClient, pt)) {
+                                Serial.println(" Upload failed.");
+                            }
+                            if (!s->mqttReported) {
+                                mqttSendConfig(&mqttClient, &prefs, d);
+                                s->mqttReported = true;
+                            }
+                            mqttSendPoint(&mqttClient, &prefs, d, &s->data);
+                        } else {
+                            Serial.print("Read failed.");
+                        }
+                        influxFlushBuffer(influxClient);
+                    }
+
+                    if (ar4.isConnected()) {
                         ar4.disconnect();
                         Serial.println("Disconnected.");
-                        break;
                     }
                 }
 
