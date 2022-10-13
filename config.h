@@ -25,6 +25,9 @@
 #define CFG_DEF_LOGIN_USER "admin"
 #define CFG_DEF_LOGIN_PASSWORD ""
 
+// spiffs
+#define FORMAT_SPIFFS_IF_FAILED true
+
 const char *ssid = "Aranet4-ESP32 Bridge";
 const char *password = "Ar@net4Br1dge";
 

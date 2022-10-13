@@ -22,9 +22,9 @@ void setup() {
     pinMode(MODE_PIN, INPUT_PULLUP);
     pinMode(LED_PIN, OUTPUT); // green LED
 
-    if(!SPIFFS.begin()){
+    spiffsOk = SPIFFS.begin(FORMAT_SPIFFS_IF_FAILED);
+    if(!spiffsOk){
         Serial.println("An Error has occurred while mounting SPIFFS");
-        return;
     }
 
     configLoad();
