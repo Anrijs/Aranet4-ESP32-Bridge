@@ -87,6 +87,9 @@ void BtScanTaskCode(void* pvParameters);
 void WiFiTaskCode(void* pvParameters);
 void NtpSyncTaskCode(void* pvParameters);
 
+AranetDeviceStatus* findSavedDevice(uint8_t macaddr);
+AranetDeviceStatus* findSavedDevice(NimBLEAdvertisedDevice adv);
+
 // ---------------------------------------------------
 //                 Function definitions
 // ---------------------------------------------------
@@ -839,5 +842,32 @@ char* getResetReason(RESET_REASON reason) {
   }
 }
 
+AranetDeviceStatus* findSavedDevice(uint8_t* macaddr) {
+    AranetDeviceStatus* s = nullptr;
+    AranetDevice* d = nullptr;
+
+    for (int j=0; j<ar4devices.size; j++) {
+        s = &ar4status[j];
+        d = s->device;
+        if (memcmp(macaddr, d->addr, 6) == 0) {
+            return s;
+        }
+    }
+
+    return nullptr;
+}
+
+AranetDeviceStatus* findSavedDevice(NimBLEAdvertisedDevice* adv) {
+    // find matching aranet device
+    uint8_t macaddr[6];
+    macaddr[0] = adv->getAddress().getNative()[5];
+    macaddr[1] = adv->getAddress().getNative()[4];
+    macaddr[2] = adv->getAddress().getNative()[3];
+    macaddr[3] = adv->getAddress().getNative()[2];
+    macaddr[4] = adv->getAddress().getNative()[1];
+    macaddr[5] = adv->getAddress().getNative()[0];
+
+    return findSavedDevice(macaddr);
+}
 
 #endif
