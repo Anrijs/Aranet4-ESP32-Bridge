@@ -7,6 +7,10 @@
 typedef struct AranetDevice {
     uint8_t addr[6];
     char name[24];
+    uint8_t paired  : 1,
+            enabled : 1,
+            gatt    : 1,
+            history : 1;
 };
 
 // Saved device config
@@ -23,6 +27,22 @@ typedef struct AranetDeviceStatus {
     long updated = 0;
     uint16_t pending = 0;
     bool mqttReported = false;
+};
+
+// scanned device info
+enum DeviceType {
+  UNKNOWN = 0,
+  ARANET4 = 1
+};
+
+typedef struct ScanCache {
+    uint64_t umac = 0;
+    int rssi = -1;
+    char name[24];
+    DeviceType type;
+    long lastSeen = 0;
+    uint8_t connectable : 1,
+            beacon      : 1;
 };
 
 #endif

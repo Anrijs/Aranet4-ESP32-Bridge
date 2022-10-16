@@ -63,11 +63,6 @@ void setup() {
 }
 
 void loop() {
-    if (isAp) {
-      task_sleep(1000);
-      return;
-    }
-
     if (nextReport < millis()) {
         nextReport = millis() + 10000; // 10s
         Point pt = influxCreateStatusPoint(&prefs);
@@ -79,21 +74,15 @@ void loop() {
 
     int count = ar4devices.size;
 
-    while (isScanOpen()) {
-        Serial.println("Waiting for scan to close");
-        // don't read data, while scan page is opened
-        task_sleep(1000);
-    }
-
     // do scan and read
-    if (count > 0) {
-        bool doScan = false;
-        for (int j=0; j<count; j++) {
-            AranetDeviceStatus* s = s = &ar4status[j];
-            long expectedUpdateAt = s->updated + ((s->data.interval - s->data.ago) * 1000);
-            doScan |= !(millis() < expectedUpdateAt && s->updated > 0);
-            if (doScan) break;
-        }
+    if (true) {
+        bool doScan = true; //false;
+        // for (int j=0; j<count; j++) {
+        //     AranetDeviceStatus* s = s = &ar4status[j];
+        //     long expectedUpdateAt = s->updated + ((s->data.interval - s->data.ago) * 1000);
+        //     doScan |= !(millis() < expectedUpdateAt && s->updated > 0);
+        //     if (doScan) break;
+        // }
 
         if (doScan) {
             runBtScan();
@@ -121,15 +110,21 @@ void loop() {
                 memcpy(&manufacturerId, (void*) cManufacturerData, sizeof(manufacturerId));
 
                 bool hasManufacturerData = manufacturerId == 0x0702 && cLength >= 22;
+                bool hasName = adv.getName().find("Aranet") != std::string::npos;
 
-                if (adv.getName().find("Aranet") == std::string::npos && !hasManufacturerData) {
+                if (!hasName && !hasManufacturerData) {
                     continue;
                 }
 
-                // find saved aranet device
-                AranetDeviceStatus* s = findSavedDevice(&adv);
+                registerScannedDevice(&adv, ARANET4);
 
-                if (!s) break; // device not saved
+                // find saved aranet device
+                AranetDeviceStatus* s = findDeviceStatus(&adv);
+
+                if (!s) {
+                  Serial.printf("Dont read from %s. Not saved\n",adv.getAddress().toString().c_str());
+                  break; // device not saved
+                }
 
                 AranetDevice* d = s->device;
                 long expectedUpdateAt = s->updated + ((s->data.interval - s->data.ago) * 1000);
@@ -213,6 +208,9 @@ void loop() {
                 cancelWatchdog();
                 influxFlushBuffer(influxClient);
             }
+
+            cleanupScannedDevices();
+            printScannecDevices();
             Serial.println("Waiting for next scan");
         }
         Serial.print(".");
