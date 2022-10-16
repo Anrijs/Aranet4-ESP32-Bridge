@@ -118,7 +118,7 @@ void loop() {
 
                 registerScannedDevice(&adv, ARANET4);
 
-                // find saved aranet device
+                // find saved aranet devic
                 AranetDeviceStatus* s = findDeviceStatus(&adv);
 
                 if (!s) {
@@ -131,7 +131,13 @@ void loop() {
                 bool readCurrent = !(millis() < expectedUpdateAt && s->updated > 0);
                 bool readHistory = s->pending > 0;
 
-                if(readCurrent && !readHistory) break; // no new measurements
+                if(!readCurrent && !readHistory) {
+                  Serial.println("No new data");
+                  Serial.printf("  exp. update: %u\n", expectedUpdateAt);
+                  Serial.printf("  rc: %u, %u\n", readCurrent, readHistory);
+
+                  break; // no new measurements
+                }
 
                 startWatchdog(30);
 
@@ -152,9 +158,9 @@ void loop() {
                 } else {
                     // read from gatt
                     Serial.print("Connecting to ");
-                    Serial.println(d->name);
+                    Serial.print(d->name);
 
-                    ar4_err_t status = ar4.connect(d->addr);
+                    ar4_err_t status = ar4.connect(adv.getAddress(), s->device->paired);
 
                     if (status == AR4_OK) {
                         s->data = ar4.getCurrentReadings();

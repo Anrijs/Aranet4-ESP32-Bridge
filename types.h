@@ -3,14 +3,43 @@
 
 #include "config.h"
 #include "Aranet4.h"
+#include "utils.h"
+
+enum DeviceType {
+  UNKNOWN = 0,
+  ARANET4 = 1
+};
 
 typedef struct AranetDevice {
     uint8_t addr[6];
     char name[24];
-    uint8_t paired  : 1,
-            enabled : 1,
-            gatt    : 1,
-            history : 1;
+    bool paired;
+    bool enabled;
+    bool gatt;
+    bool history;
+
+    void saveConfig(DynamicJsonDocument &doc) {
+        JsonArray devices;
+
+        if (doc.containsKey("devices")) {
+            devices = doc["devices"];
+        } else {
+            devices = doc.createNestedArray("devices");
+        }
+
+        char buf[24];
+        mac2str(addr, buf, true);
+
+        JsonObject device = devices.createNestedObject();
+        device["mac"] = buf;
+        device["name"] = name;
+
+        JsonObject settings = device.createNestedObject("settings");
+        settings["paired"] = paired;
+        settings["enabled"] = enabled;
+        settings["gatt"] = gatt;
+        settings["history"] = history;
+    }
 };
 
 // Saved device config
@@ -30,11 +59,6 @@ typedef struct AranetDeviceStatus {
 };
 
 // scanned device info
-enum DeviceType {
-  UNKNOWN = 0,
-  ARANET4 = 1
-};
-
 typedef struct ScanCache {
     uint64_t umac = 0;
     int rssi = -1;

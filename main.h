@@ -9,6 +9,7 @@
 #include "SPIFFS.h"
 #include <rom/rtc.h>
 #include <vector>
+#include <ArduinoJson.h>
 //#include "esp_task_wdt.h"
 
 #include "vector"
@@ -73,6 +74,9 @@ bool spiffsOk = false;
 //                 Function declarations
 // ---------------------------------------------------
 int configLoad();
+void devicesLoad();
+void devicesSave();
+
 int createInfluxClient();
 bool getBootWiFiMode();
 bool startWebserver();
@@ -108,30 +112,55 @@ bool isScanOpen() {
 }
 
 void wipeStoredDevices() {
-  if (!EEPROM.begin(sizeof(AranetDeviceConfig))) {
-    Serial.println("failed to initialize ar4 EEPROM");
-    return;
-  }
-
-  for (uint16_t j = 0; j < sizeof(AranetDeviceConfig); j++) {
-    EEPROM.write(j, 0);
-  }
-
-  EEPROM.commit();
+  ar4devices.size = 0;
+  SPIFFS.remove("/devices.json");
+  devicesSave();
 }
 
 void devicesLoad() {
-  if (!EEPROM.begin(sizeof(AranetDeviceConfig))) {
-    Serial.println("failed to initialize ar4 EEPROM");
-    return;
-  }
+  ar4devices.size = 0;
+  Serial.println("Loading devices...");
+  if (SPIFFS.exists("/devices.json")) {
+    File file = SPIFFS.open("/devices.json");
 
-  for (int i = 0; i < sizeof(AranetDeviceConfig); i++) {
-    char b = EEPROM.read(i);
-    ((char *) &ar4devices)[i] = b;
-  }
+    if (file) {
+        DynamicJsonDocument doc(4096); // 4k
+        DeserializationError error = deserializeJson(doc, file);
 
-  Serial.printf("SIZE OF DEVICES: %i\n", sizeof(AranetDeviceConfig));
+        if (error) {
+            log_e("config: failed to read config file");\
+            file.close();
+            return;
+        }
+
+        if (doc.containsKey("devices")) {
+            JsonArray devices = doc["devices"];
+            int index = 0;
+            for (JsonObject dev : devices) {
+              if (dev.isNull()) continue;
+              Serial.printf("Load device %u\n", index);
+              JsonObject settings = dev["settings"];
+              ar4devices.devices[index].enabled = settings["enabled"];
+              ar4devices.devices[index].paired = settings["paired"];
+              ar4devices.devices[index].gatt = settings["gatt"];
+              ar4devices.devices[index].history = settings["history"];
+
+              const char* name = dev["name"];
+              const char* mac = dev["mac"];
+
+              NimBLEAddress addr(mac);
+              memcpy(ar4devices.devices[index].addr, addr.getNative(), 6);
+              strcpy(ar4devices.devices[index].name, name);
+
+              index++;
+            }
+            ar4devices.size = index;
+        }
+        file.close();
+    }
+  } else {
+    Serial.println("config file not exist!");
+  }
 
   // link devices
   for (int i = 0; i < ar4devices.size; i++) {
@@ -140,11 +169,30 @@ void devicesLoad() {
 }
 
 void devicesSave() {
-  for (uint16_t j = 0; j < sizeof(AranetDeviceConfig); j++) {
-    char b = ((char *) &ar4devices)[j];
-    EEPROM.write(j, b);
+  File cfg = SPIFFS.open("/devices.json");
+  if (!cfg) return;
+
+  DynamicJsonDocument doc(4096); // 4k
+  DeserializationError error = deserializeJson(doc, cfg);
+  if (error) {
+    log_e("web: failed to read file, using default configuration");
   }
-  EEPROM.commit();
+  cfg.close();
+
+  SPIFFS.remove("/devices.json");
+  cfg = SPIFFS.open("/devices.json", FILE_WRITE);
+
+  for (int i = 0; i < ar4devices.size; i++) {
+    AranetDevice devc = ar4devices.devices[i];
+    devc.saveConfig(doc);
+  }
+
+  if (serializeJsonPretty(doc, cfg) == 0) {
+    log_e("web: failed to write config file");
+  }
+
+  // Close the file
+  cfg.close();
 }
 
 void saveDevice(uint8_t* addr, String name, bool paired) {
@@ -555,12 +603,7 @@ bool startWebserver() {
       NimBLEAddress addr(devicemac.c_str());
 
       uint8_t maddr[6];
-      maddr[0] = addr.getNative()[5];
-      maddr[1] = addr.getNative()[4];
-      maddr[2] = addr.getNative()[3];
-      maddr[3] = addr.getNative()[2];
-      maddr[4] = addr.getNative()[1];
-      maddr[5] = addr.getNative()[0];
+      memcpy(maddr, addr.getNative(), 6);
 
       if (false /* FIXME Aranet4::isPaired(addr) */) {
         //Serial.printf("Already paired... %02X:%02X:%02X...\n", addr[0], addr[1], addr[2]);
@@ -681,6 +724,7 @@ bool startWebserver() {
   if (spiffsOk) {
     server.serveStatic("/img/", SPIFFS, "/img/", "max-age=86400"); // 1 day cache
     server.serveStatic("/js/", SPIFFS, "/js/", "max-age=86400"); // 1 day cache
+    server.serveStatic("/devices.json", SPIFFS, "/devices.json", "max-age=1"); // no cache
   }
 
   server.onNotFound(handleNotFound);
@@ -875,12 +919,7 @@ AranetDeviceStatus* findDeviceStatus(uint8_t* macaddr) {
 AranetDeviceStatus* findDeviceStatus(NimBLEAdvertisedDevice* adv) {
     // find matching aranet device
     uint8_t macaddr[6];
-    macaddr[0] = adv->getAddress().getNative()[5];
-    macaddr[1] = adv->getAddress().getNative()[4];
-    macaddr[2] = adv->getAddress().getNative()[3];
-    macaddr[3] = adv->getAddress().getNative()[2];
-    macaddr[4] = adv->getAddress().getNative()[1];
-    macaddr[5] = adv->getAddress().getNative()[0];
+    memcpy(macaddr, adv->getAddress().getNative(), sizeof(macaddr));
 
     return findDeviceStatus(macaddr);
 }

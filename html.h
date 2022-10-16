@@ -274,20 +274,7 @@ String printHtmlIndex(AranetDeviceStatus* devices, int count) {
   Serial.print("Task1 running on core ");
   Serial.println(xPortGetCoreID());
 
-  char buf[24];
   for (uint8_t i=0; i < count; i++) {
-    bool ok = false;
-    for (uint8_t j=0; j < 6; j++) {
-      if (devices[i].device->addr[j] != 0) {
-        ok = true;
-        break;
-      }
-    }
-
-    if (!ok) {
-      continue;
-    }
-
     page += printAranetCard(&devices[i], i);
   }
 
