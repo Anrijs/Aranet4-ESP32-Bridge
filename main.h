@@ -63,7 +63,6 @@ NimBLEScan *pScan = NimBLEDevice::getScan();
 
 bool isAp = true;
 long wifiConnectedAt = 0;
-long scanBlockTimeout = 0;
 long ntpSyncTime = 0;
 uint8_t ntpSyncFails = 0;
 bool spiffsOk = false;
@@ -103,10 +102,6 @@ AranetDevice* findSavedDevice(NimBLEAdvertisedDevice adv);
 
 bool isManualIp() {
     return (prefs.getBool(PREF_K_WIFI_IP_STATIC));
-}
-
-bool isScanOpen() {
-    return (scanBlockTimeout > millis());
 }
 
 void wipeStoredDevices() {
@@ -546,7 +541,6 @@ bool startWebserver() {
     server.on("/scanresults", HTTP_GET, []() {
         if (!webAuthenticate()) return server.requestAuthentication();
 
-        scanBlockTimeout = millis() + 5000;
         server.send(200, "text/plain", printScannedDevices());
     });
 
@@ -629,11 +623,6 @@ bool startWebserver() {
 
                     if (adv && ar4.connect(adv, false) == AR4_OK) {
                         server.send(200, "text/html", "OK");
-
-                        // PIN prompt might lock web request, so we give extra 30s for pairing process
-                        // It will be reset to +5 sec once prompt is closed and web requests starts again
-                        scanBlockTimeout = millis() + 30000;
-
                         ar4.secureConnection();
                     } else {
                         server.send(200, "text/html", "Connection failed");
