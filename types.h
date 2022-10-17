@@ -6,8 +6,8 @@
 #include "utils.h"
 
 enum DeviceType {
-  UNKNOWN = 0,
-  ARANET4 = 1
+    UNKNOWN = 0,
+    ARANET4 = 1
 };
 
 typedef struct AranetDevice { 
@@ -52,7 +52,7 @@ typedef struct AranetDevice {
     }
 
     bool equals(NimBLEAddress address) {
-      return memcmp(address.getNative(), addr, 6) == 0;
+        return memcmp(address.getNative(), addr, 6) == 0;
     }
 };
 

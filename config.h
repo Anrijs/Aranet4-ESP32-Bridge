@@ -37,11 +37,11 @@ const char *password = "Ar@net4Br1dge";
 #define WRITE_PRECISION WritePrecision::S
 
 enum ILog {
-  NONE = 0,
-  ERROR,
-  WARNING,
-  INFO,
-  DEBUG
+    NONE = 0,
+    ERROR,
+    WARNING,
+    INFO,
+    DEBUG
 };
 
 // mqtt

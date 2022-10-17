@@ -34,7 +34,7 @@ void setup() {
 
     if (!setupWifiAndWebserver()) {
         Serial.println("Failed to initialize.");
-         return;
+        return;
     }
 
     createInfluxClient();
@@ -106,12 +106,12 @@ void loop() {
 
         registerScannedDevice(&adv);
 
-        // find saved aranet devic
+        // find saved aranet device
         AranetDevice* d = findSavedDevice(&adv);
 
         if (!d) {
-          Serial.printf("Dont read from %s. Not saved\n",adv.getAddress().toString().c_str());
-          break; // device not saved
+            Serial.printf("Dont read from %s. Not saved\n",adv.getAddress().toString().c_str());
+            break; // device not saved
         }
 
         long expectedUpdateAt = d->updated + ((d->data.interval - d->data.ago) * 1000);
@@ -119,11 +119,11 @@ void loop() {
         bool readHistory = d->pending > 0;
 
         if(!readCurrent && !readHistory) {
-          Serial.println("No new data");
-          Serial.printf("  exp. update: %u\n", expectedUpdateAt);
-          Serial.printf("  rc: %u, %u\n", readCurrent, readHistory);
+            Serial.println("No new data");
+            Serial.printf("  exp. update: %u\n", expectedUpdateAt);
+            Serial.printf("  rc: %u, %u\n", readCurrent, readHistory);
 
-          break; // no new measurements
+            break; // no new measurements
         }
 
         startWatchdog(30);
