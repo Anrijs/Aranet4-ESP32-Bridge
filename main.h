@@ -93,7 +93,7 @@ void BtScanTaskCode(void* pvParameters);
 void WiFiTaskCode(void* pvParameters);
 void NtpSyncTaskCode(void* pvParameters);
 
-AranetDevice* findSavedDevice(uint8_t* macaddr);
+AranetDevice* findSavedDevice(NimBLEAddress macaddr);
 AranetDevice* findSavedDevice(NimBLEAdvertisedDevice adv);
 
 // ---------------------------------------------------
@@ -135,25 +135,25 @@ void devicesLoad() {
             if (doc.containsKey("devices")) {
                 JsonArray devices = doc["devices"];
                 for (JsonObject dev : devices) {
-                if (dev.isNull()) continue;
-                Serial.printf("Load device %u\n", index);
-                JsonObject settings = dev["settings"];
+                    if (dev.isNull()) continue;
 
-                AranetDevice* d = new AranetDevice();
+                    Serial.printf("Load device %u\n", index);
+                    JsonObject settings = dev["settings"];
 
-                d->enabled = settings["enabled"];
-                d->paired = settings["paired"];
-                d->gatt = settings["gatt"];
-                d->history = settings["history"];
+                    AranetDevice* d = new AranetDevice();
 
-                const char* name = dev["name"];
-                const char* mac = dev["mac"];
+                    d->enabled = settings["enabled"];
+                    d->paired = settings["paired"];
+                    d->gatt = settings["gatt"];
+                    d->history = settings["history"];
 
-                NimBLEAddress addr(mac);
-                memcpy(d->addr, addr.getNative(), 6);
-                strcpy(d->name, name);
+                    const char* name = dev["name"];
+                    const char* mac = dev["mac"];
 
-                ar4devices.push_back(d);
+                    d->addr = NimBLEAddress(mac);
+                    strcpy(d->name, name);
+
+                    ar4devices.push_back(d);
                 }
             }
             file.close();
@@ -189,10 +189,10 @@ void devicesSave() {
     cfg.close();
 }
 
-void saveDevice(uint8_t* addr, String name, bool paired) {
+void saveDevice(NimBLEAddress addr, String name, bool paired) {
     AranetDevice* d = new AranetDevice();
     d->paired = paired;
-    memcpy(d->addr, addr, 6);
+    d->addr = addr;
     memcpy(d->name, name.c_str(), 24);
     
     ar4devices.push_back(d);
@@ -277,9 +277,8 @@ String printData() {
     for (AranetDevice* d : ar4devices) {
         page += String(index++) + ";";
 
-        mac2str(d->addr, buf, false);
         page += String(d->name);
-        page += ";" + String(buf) + ";";
+        page += ";" + String(d->addr.toString().c_str()) + ";";
 
         sprintf(buf, "%i;%.1f;%.1f;%i;%i;%i;%i;%i\n",
                 d->data.co2,
@@ -302,13 +301,10 @@ String printScannedDevices() {
     int index = 0;
     long ms = millis();
     for (AranetDevice* d : newDevices) {
-        char buf[24];
-        mac2str(d->addr, buf, true);
-
         page += "\n";
         page += String(index);
         page += ";";
-        page += String(buf);
+        page += String(d->addr.toString().c_str());
         page += ";";
         page += String(d->rssi);
         page += ";";
@@ -568,9 +564,6 @@ bool startWebserver() {
             Serial.println("Begin pair");
             NimBLEAddress addr(devicemac.c_str());
 
-            uint8_t maddr[6];
-            memcpy(maddr, addr.getNative(), 6);
-
             if (false /* FIXME Aranet4::isPaired(addr) */) {
                 //Serial.printf("Already paired... %02X:%02X:%02X...\n", addr[0], addr[1], addr[2]);
                 //String ar4name = ar4.getName();
@@ -588,7 +581,7 @@ bool startWebserver() {
 
                     String ar4name = ar4.getName();
                     if (ar4name.length() > 1) {
-                        saveDevice(maddr, ar4name, true);
+                        saveDevice(addr, ar4name, true);
                         result = "Connected to " + ar4name;
                     } else {
                         result = "Failed to get name";
@@ -868,13 +861,11 @@ char* getResetReason(RESET_REASON reason) {
     }
 }
 
-AranetDevice* findSavedDevice(uint8_t* macaddr) {
+AranetDevice* findSavedDevice(NimBLEAddress macaddr) {
     AranetDevice* d = nullptr;
 
     for (AranetDevice* d : ar4devices) {
-        if (memcmp(macaddr, d->addr, 6) == 0) {
-            return d;
-        }
+        if (d->addr.equals(macaddr)) return d;
     }
 
     return nullptr;
@@ -882,10 +873,7 @@ AranetDevice* findSavedDevice(uint8_t* macaddr) {
 
 AranetDevice* findSavedDevice(NimBLEAdvertisedDevice* adv) {
     // find matching aranet device
-    uint8_t macaddr[6];
-    memcpy(macaddr, adv->getAddress().getNative(), sizeof(macaddr));
-
-    return findSavedDevice(macaddr);
+    return findSavedDevice(adv->getAddress());
 }
 
 void registerScannedDevice(NimBLEAdvertisedDevice* adv) {
@@ -916,7 +904,7 @@ void registerScannedDevice(NimBLEAdvertisedDevice* adv) {
         if (!dev) {
             dev = new AranetDevice();
             strcpy(dev->name, adv->getName().c_str());
-            memcpy(dev->addr, umac.getNative(), 6);
+            dev->addr = umac;
             newDevices.push_back(dev);
         }
     }

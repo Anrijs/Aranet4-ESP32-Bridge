@@ -11,7 +11,7 @@ enum DeviceType {
 };
 
 typedef struct AranetDevice { 
-    uint8_t addr[6]; // TODO: replace with NimBLEAddress
+    NimBLEAddress addr;
     char name[24];
     bool paired;
     bool enabled;
@@ -37,11 +37,8 @@ typedef struct AranetDevice {
             devices = doc.createNestedArray("devices");
         }
 
-        char buf[24];
-        mac2str(addr, buf, true);
-
         JsonObject device = devices.createNestedObject();
-        device["mac"] = buf;
+        device["mac"] = addr.toString().c_str();
         device["name"] = name;
 
         JsonObject settings = device.createNestedObject("settings");
@@ -52,7 +49,7 @@ typedef struct AranetDevice {
     }
 
     bool equals(NimBLEAddress address) {
-        return memcmp(address.getNative(), addr, 6) == 0;
+        return addr.equals(address);
     }
 };
 
