@@ -10,13 +10,23 @@ enum DeviceType {
   ARANET4 = 1
 };
 
-typedef struct AranetDevice {
-    uint8_t addr[6];
+typedef struct AranetDevice { 
+    uint8_t addr[6]; // TODO: replace with NimBLEAddress
     char name[24];
     bool paired;
     bool enabled;
     bool gatt;
     bool history;
+
+    // moved from status struct
+    AranetData data;
+    long updated = 0;
+    uint16_t pending = 0;
+    bool mqttReported = false;
+
+    // extra data
+    int rssi;
+    long lastSeen;
 
     void saveConfig(DynamicJsonDocument &doc) {
         JsonArray devices;
@@ -40,33 +50,10 @@ typedef struct AranetDevice {
         settings["gatt"] = gatt;
         settings["history"] = history;
     }
-};
 
-// Saved device config
-typedef struct AranetDeviceConfig {
-    uint16_t version = CFG_DEV_VER;
-    uint16_t size = 0;
-    uint8_t _reserved[32]; 
-    AranetDevice devices[CFG_MAX_DEVICES];
-};
-
-typedef struct AranetDeviceStatus {
-    AranetDevice* device;
-    AranetData data;
-    long updated = 0;
-    uint16_t pending = 0;
-    bool mqttReported = false;
-};
-
-// scanned device info
-typedef struct ScanCache {
-    uint64_t umac = 0;
-    int rssi = -1;
-    char name[24];
-    DeviceType type;
-    long lastSeen = 0;
-    uint8_t connectable : 1,
-            beacon      : 1;
+    bool equals(NimBLEAddress address) {
+      return memcmp(address.getNative(), addr, 6) == 0;
+    }
 };
 
 #endif

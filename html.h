@@ -196,15 +196,13 @@ String printCard(String title, String body, String cardimg = "", String fn = "",
   return card;
 }
 
-String printAranetCard(AranetDeviceStatus* status, int id) {
-  AranetDevice* d = status->device;
-
+String printAranetCard(AranetDevice* device, int id) {
   String klass = "co2-none";
-  if (status->data.co2 == 0) {
+  if (device->data.co2 == 0) {
     klass = "co2-none";
-  }else if (status->data.co2 < 1000) {
+  }else if (device->data.co2 < 1000) {
     klass = "co2-ok";
-  } else if (status->data.co2 < 1400) {
+  } else if (device->data.co2 < 1400) {
     klass = "co2-warn";
   } else {
     klass = "co2-alert";
@@ -217,30 +215,30 @@ String printAranetCard(AranetDeviceStatus* status, int id) {
   char buf2[6];
   char buf3[6];
   
-  sprintf(buf0, "%i", status->data.co2);
-  sprintf(buf1, "%.1f", status->data.temperature / 20.0);
-  sprintf(buf2, "%i", status->data.humidity);
-  sprintf(buf3, "%i", status->data.pressure);
-  sprintf(buf3, "%i", status->data.pressure);
-  sprintf(buf3, "%i", status->data.pressure);
+  sprintf(buf0, "%i", device->data.co2);
+  sprintf(buf1, "%.1f", device->data.temperature / 20.0);
+  sprintf(buf2, "%i", device->data.humidity);
+  sprintf(buf3, "%i", device->data.pressure);
+  sprintf(buf3, "%i", device->data.pressure);
+  sprintf(buf3, "%i", device->data.pressure);
 
   String batimg = "";
   
-  if (status->data.battery > 90) { batimg = "100"; }
-  else if (status->data.battery > 80) { batimg = "90"; }
-  else if (status->data.battery > 70) { batimg = "80"; }
-  else if (status->data.battery > 60) { batimg = "70"; }
-  else if (status->data.battery > 50) { batimg = "60"; }
-  else if (status->data.battery > 40) { batimg = "50"; }
-  else if (status->data.battery > 30) { batimg = "40"; }
-  else if (status->data.battery > 20) { batimg = "30"; }
-  else if (status->data.battery > 10) { batimg = "20"; }
+  if (device->data.battery > 90) { batimg = "100"; }
+  else if (device->data.battery > 80) { batimg = "90"; }
+  else if (device->data.battery > 70) { batimg = "80"; }
+  else if (device->data.battery > 60) { batimg = "70"; }
+  else if (device->data.battery > 50) { batimg = "60"; }
+  else if (device->data.battery > 40) { batimg = "50"; }
+  else if (device->data.battery > 30) { batimg = "40"; }
+  else if (device->data.battery > 20) { batimg = "30"; }
+  else if (device->data.battery > 10) { batimg = "20"; }
   else { batimg = "10"; }
 
   String btimg = "bluetooth";
   // 
-  long updatedAgo = (millis() - status->updated) / 1000;
-  if (updatedAgo > status->data.interval + 5) {
+  long updatedAgo = (millis() - device->updated) / 1000;
+  if (updatedAgo > device->data.interval + 5) {
     btimg = "bluetoothred";
   }
   
@@ -248,9 +246,9 @@ String printAranetCard(AranetDeviceStatus* status, int id) {
   card += "<div class=\"cardbody\">";
   card +=   "<div>";
   card +=     "<img src=\"/img/"+btimg+".png\" class=\"cardimg\">";
-  card +=     "<span class=\"cardtitle\">" + String(d->name) + "</span>";
+  card +=     "<span class=\"cardtitle\">" + String(device->name) + "</span>";
   card +=       "<span style=\"float:right;\">";
-  card +=         "<img class=\"batt-val\" src=\"/img/battery_" + batimg + ".png\" class=\"cardimg\" title=\"" + String(status->data.battery) + "%\">";
+  card +=         "<img class=\"batt-val\" src=\"/img/battery_" + batimg + ".png\" class=\"cardimg\" title=\"" + String(device->data.battery) + "%\">";
   //card +=         "<img src=\"/img/graph.png\" class=\"cardimg\">";
   //card +=         "<img src=\"/img/settings_dash.png\" class=\"cardimg\">";
   card +=       "</span>";
@@ -269,13 +267,14 @@ String printAranetCard(AranetDeviceStatus* status, int id) {
   return card;
 }
 
-String printHtmlIndex(AranetDeviceStatus* devices, int count) {
+String printHtmlIndex(std::vector<AranetDevice*> devices) {
   String page = String(htmlHeader);
   Serial.print("Task1 running on core ");
   Serial.println(xPortGetCoreID());
 
-  for (uint8_t i=0; i < count; i++) {
-    page += printAranetCard(&devices[i], i);
+  int index = 0;
+  for (AranetDevice* d : devices) {
+    page += printAranetCard(d, index++);
   }
 
   page += "<div class=\"card clickable\" onclick=\"page('scan')\">";

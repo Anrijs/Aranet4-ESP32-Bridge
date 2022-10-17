@@ -39,8 +39,8 @@ Preferences prefs;
 WebServer server(80);
 
 MyAranet4Callbacks ar4callbacks;
-AranetDeviceConfig ar4devices;
-AranetDeviceStatus ar4status[CFG_MAX_DEVICES];
+std::vector<AranetDevice*> ar4devices;
+std::vector<AranetDevice*> newDevices;
 
 Aranet4 ar4(&ar4callbacks);
 InfluxDBClient* influxClient = nullptr;
@@ -49,8 +49,6 @@ WiFiClient espClient;
 MqttClient mqttClient(espClient);
 
 AranetDataCompact logs[CFG_HISTORY_CHUNK_SIZE];
-
-std::vector<ScanCache*> scanCache;
 
 // RTOS
 TaskHandle_t BtScanTask;
@@ -96,8 +94,8 @@ void BtScanTaskCode(void* pvParameters);
 void WiFiTaskCode(void* pvParameters);
 void NtpSyncTaskCode(void* pvParameters);
 
-AranetDeviceStatus* findDeviceStatus(uint8_t* macaddr);
-AranetDeviceStatus* findDeviceStatus(NimBLEAdvertisedDevice adv);
+AranetDevice* findSavedDevice(uint8_t* macaddr);
+AranetDevice* findSavedDevice(NimBLEAdvertisedDevice adv);
 
 // ---------------------------------------------------
 //                 Function definitions
@@ -112,13 +110,19 @@ bool isScanOpen() {
 }
 
 void wipeStoredDevices() {
-  ar4devices.size = 0;
+  for (AranetDevice* d : ar4devices) {
+    delete d;
+  }
+  ar4devices.clear();
   SPIFFS.remove("/devices.json");
   devicesSave();
 }
 
 void devicesLoad() {
-  ar4devices.size = 0;
+  for (AranetDevice* d : ar4devices) {
+    delete d;
+  }
+  ar4devices.clear();
   Serial.println("Loading devices...");
   if (SPIFFS.exists("/devices.json")) {
     File file = SPIFFS.open("/devices.json");
@@ -135,36 +139,32 @@ void devicesLoad() {
 
         if (doc.containsKey("devices")) {
             JsonArray devices = doc["devices"];
-            int index = 0;
             for (JsonObject dev : devices) {
               if (dev.isNull()) continue;
               Serial.printf("Load device %u\n", index);
               JsonObject settings = dev["settings"];
-              ar4devices.devices[index].enabled = settings["enabled"];
-              ar4devices.devices[index].paired = settings["paired"];
-              ar4devices.devices[index].gatt = settings["gatt"];
-              ar4devices.devices[index].history = settings["history"];
+
+              AranetDevice* d = new AranetDevice();
+
+              d->enabled = settings["enabled"];
+              d->paired = settings["paired"];
+              d->gatt = settings["gatt"];
+              d->history = settings["history"];
 
               const char* name = dev["name"];
               const char* mac = dev["mac"];
 
               NimBLEAddress addr(mac);
-              memcpy(ar4devices.devices[index].addr, addr.getNative(), 6);
-              strcpy(ar4devices.devices[index].name, name);
+              memcpy(d->addr, addr.getNative(), 6);
+              strcpy(d->name, name);
 
-              index++;
+              ar4devices.push_back(d);
             }
-            ar4devices.size = index;
         }
         file.close();
     }
   } else {
     Serial.println("config file not exist!");
-  }
-
-  // link devices
-  for (int i = 0; i < ar4devices.size; i++) {
-    ar4status[i].device = &ar4devices.devices[i];
   }
 }
 
@@ -182,9 +182,8 @@ void devicesSave() {
   SPIFFS.remove("/devices.json");
   cfg = SPIFFS.open("/devices.json", FILE_WRITE);
 
-  for (int i = 0; i < ar4devices.size; i++) {
-    AranetDevice devc = ar4devices.devices[i];
-    devc.saveConfig(doc);
+  for (AranetDevice* d : ar4devices) {
+    d->saveConfig(doc);
   }
 
   if (serializeJsonPretty(doc, cfg) == 0) {
@@ -196,13 +195,12 @@ void devicesSave() {
 }
 
 void saveDevice(uint8_t* addr, String name, bool paired) {
-  memcpy(&ar4devices.devices[ar4devices.size].addr, addr, 6);
-  memcpy(&ar4devices.devices[ar4devices.size].name, name.c_str(), 24);
-
-  ar4devices.devices[ar4devices.size].paired = paired;
-
-  ar4status[ar4devices.size].device = &ar4devices.devices[ar4devices.size];
-  ar4devices.size += 1;
+  AranetDevice* d = new AranetDevice();
+  d->paired = paired;
+  memcpy(d->addr, addr, 6);
+  memcpy(d->name, name.c_str(), 24);
+  
+  ar4devices.push_back(d);
 
   devicesSave();
 }
@@ -280,23 +278,24 @@ String printData() {
 
   long tnow = millis();
 
-  for (uint8_t i = 0; i < ar4devices.size; i++) {
-    page += String(i) + ";";
+  int index = 0;
+  for (AranetDevice* d : ar4devices) {
+    page += String(index++) + ";";
 
-    mac2str(ar4status[i].device->addr, buf, false);
-    page += String(ar4status[i].device->name);
+    mac2str(d->addr, buf, false);
+    page += String(d->name);
     page += ";" + String(buf) + ";";
 
     sprintf(buf, "%i;%.1f;%.1f;%i;%i;%i;%i;%i\n",
-            ar4status[i].data.co2,
-            ar4status[i].data.temperature / 20.0,
-            ar4status[i].data.pressure / 10.0,
-            ar4status[i].data.humidity,
-            ar4status[i].data.battery,
-            ar4status[i].data.interval,
-            ar4status[i].data.ago,
-            (tnow - ar4status[i].updated) / 1000
-           );
+            d->data.co2,
+            d->data.temperature / 20.0,
+            d->data.pressure / 10.0,
+            d->data.humidity,
+            d->data.battery,
+            d->data.interval,
+            d->data.ago,
+            (tnow - d->updated) / 1000
+    );
     page += String(buf);
   }
   return page;
@@ -307,34 +306,28 @@ String printScannedDevices() {
 
   int index = 0;
   long ms = millis();
-  for (ScanCache* c : scanCache) {
-    NimBLEAddress addr(c->umac);
-
-    uint8_t macaddr[6];
-    macaddr[0] = addr.getNative()[5];
-    macaddr[1] = addr.getNative()[4];
-    macaddr[2] = addr.getNative()[3];
-    macaddr[3] = addr.getNative()[2];
-    macaddr[4] = addr.getNative()[1];
-    macaddr[5] = addr.getNative()[0];
-
-    AranetDeviceStatus* s = findDeviceStatus(macaddr);
+  for (AranetDevice* d : newDevices) {
+    char buf[24];
+    mac2str(d->addr, buf, true);
 
     page += "\n";
-    page += String(c->umac);
+    page += String(index);
     page += ";";
-    page += String(addr.toString().c_str());
+    page += String(buf);
     page += ";";
-    page += String(c->rssi);
+    page += String(d->rssi);
     page += ";";
-    page += String(c->name);
+    page += String(d->name);
     page += ";";
-    page += String(ms - c->lastSeen);
+    page += String(ms - d->lastSeen);
     page += ";";
-    if (c->connectable) page += 'C';
-    if (c->beacon) page += 'B';
-    if (s && s->device->paired) page += 'P';
+    //if (d->connectable) page += 'C';
+    //if (d->beacon) page += 'B';
 
+    if (d) {
+      if (d->paired) page += 'P';
+    }
+  
     page += ";";
   }
 
@@ -458,7 +451,7 @@ bool startWebserver() {
     if (!webAuthenticate()) {
       return server.requestAuthentication();
     }
-    server.send(200, "text/html", printHtmlIndex(ar4status, ar4devices.size));
+    server.send(200, "text/html", printHtmlIndex(ar4devices));
   });
 
   server.on("/settings", HTTP_GET, []() {
@@ -696,9 +689,23 @@ bool startWebserver() {
       return server.requestAuthentication();
     }
 
-    uint8_t id = 0xFF;
-    if (server.hasArg("id")) {
-      id = server.arg("id").toInt();
+    char buf[40];
+
+    if (!server.hasArg("mac")) {
+      server.send(200, "text/html", "no mac");
+      return;
+    }
+
+    NimBLEAddress addr(server.arg("id").c_str());
+
+    uint8_t mac[6];
+    memcpy(mac, addr.getNative(), 6);
+
+    AranetDevice* d = findSavedDevice(mac);
+
+    if (!d) {
+      server.send(200, "text/html", "invalid mac");
+      return;      
     }
 
     uint16_t count = 2048; // max
@@ -706,17 +713,10 @@ bool startWebserver() {
       count = server.arg("count").toInt();
     }
 
-    char buf[40];
     sprintf(buf, "Will download %u records...", count);
-
     server.send(200, "text/html", buf);
 
-    for (int j=0; j<ar4devices.size; j++) {
-      if (id == 0xFF || id == j) {
-        AranetDeviceStatus* s = s = &ar4status[j];
-        s->pending = count;
-      }
-    }
+    d->pending = count;    
   });
 
   // Image resources
@@ -901,69 +901,79 @@ char* getResetReason(RESET_REASON reason) {
   }
 }
 
-AranetDeviceStatus* findDeviceStatus(uint8_t* macaddr) {
-    AranetDeviceStatus* s = nullptr;
+AranetDevice* findSavedDevice(uint8_t* macaddr) {
     AranetDevice* d = nullptr;
 
-    for (int j=0; j<ar4devices.size; j++) {
-        s = &ar4status[j];
-        d = s->device;
-        if (memcmp(macaddr, d->addr, 6) == 0) {
-            return s;
-        }
+    for (AranetDevice* d : ar4devices) {
+      if (memcmp(macaddr, d->addr, 6) == 0) {
+        return d;
+      }
     }
 
     return nullptr;
 }
 
-AranetDeviceStatus* findDeviceStatus(NimBLEAdvertisedDevice* adv) {
+AranetDevice* findSavedDevice(NimBLEAdvertisedDevice* adv) {
     // find matching aranet device
     uint8_t macaddr[6];
     memcpy(macaddr, adv->getAddress().getNative(), sizeof(macaddr));
 
-    return findDeviceStatus(macaddr);
+    return findSavedDevice(macaddr);
 }
 
-void registerScannedDevice(NimBLEAdvertisedDevice* adv, DeviceType type) {
+void registerScannedDevice(NimBLEAdvertisedDevice* adv) {
     // find existing
-    uint64_t umac = (uint64_t) adv->getAddress();
+    NimBLEAddress umac = adv->getAddress();
     int rssi = adv->getRSSI();
-    bool exists = false;
-    for (ScanCache* c : scanCache) {
-      if (c->umac == umac) {
-        c->lastSeen = millis();
-        c->type = type;
-        c->rssi = rssi;
-        strcpy(c->name, adv->getName().c_str());
-        exists = true;
+
+    AranetDevice* dev = nullptr;
+
+    for (AranetDevice* d : ar4devices) {
+      if (d->equals(umac)) {
+        dev = d;
+        break;
       }
     }
 
-    if (!exists) {
-        ScanCache* c = new ScanCache();
-        c->umac = umac;
-        c->type = type;
-        c->lastSeen = millis();
-        c->rssi = rssi;
-        strcpy(c->name, adv->getName().c_str());
-        scanCache.push_back(c);
+    if (!dev) {
+      // try scanned
+      for (AranetDevice* d : newDevices) {
+        NimBLEAddress dmac = NimBLEAddress(d->addr);
+        if (d->equals(umac)) {
+          dev = d;
+          break;
+        }
+      }
+
+      // make new
+      if (!dev) {
+        dev = new AranetDevice();
+        strcpy(dev->name, adv->getName().c_str());
+        memcpy(dev->addr, umac.getNative(), 6);
+        newDevices.push_back(dev);
+      }
+    }
+    
+    if (dev) {
+      dev->lastSeen = millis();
+      dev->rssi = rssi;
     }
 }
 
 void cleanupScannedDevices() {
-    scanCache.erase(
+    newDevices.erase(
         std::remove_if(
-            scanCache.begin(), scanCache.end(),
-    [](const ScanCache* c) {
-        return (millis() - c->lastSeen) > 30000; // remove 30s and older
-    }), scanCache.end());
+            newDevices.begin(), newDevices.end(),
+    [](const AranetDevice* d) {
+        return (millis() - d->lastSeen) > 30000; // remove 30s and older
+    }), newDevices.end());
 }
 
 void printScannecDevices() {
   Serial.println("----------------------");
-  for (ScanCache* c : scanCache) {
-      NimBLEAddress adr(c->umac);
-      long ago = millis() - c->lastSeen;
+  for (AranetDevice* d : newDevices) {
+      NimBLEAddress adr(d->addr);
+      long ago = millis() - d->lastSeen;
       Serial.printf("[%s],  %lu ms\n", adr.toString().c_str(), ago);
   }
 }
