@@ -80,7 +80,6 @@ bool startWebserver();
 bool webAuthenticate(AsyncWebServerRequest *request);
 bool isManualIp();
 void task_sleep(uint32_t ms);
-void runBtScan();
 void startNtpSyncTask();
 void log(String msg, ILog level);
 bool ntpSync();
@@ -89,7 +88,6 @@ void setupWatchdog();
 void startWatchdog(uint32_t period);
 bool cancelWatchdog();
 
-void BtScanTaskCode(void* pvParameters);
 void WiFiTaskCode(void* pvParameters);
 void NtpSyncTaskCode(void* pvParameters);
 
@@ -762,33 +760,6 @@ bool startWebserver() {
 
 void task_sleep(uint32_t ms) {
     vTaskDelay(ms / portTICK_PERIOD_MS);
-}
-
-void runBtScan() {
-    if (pScan->isScanning()) return;
-
-    xTaskCreatePinnedToCore(
-        BtScanTaskCode,  /* Task function. */
-        "BtScanTask",    /* name of task. */
-        10000,           /* Stack size of task */
-        NULL,            /* parameter of the task */
-        3,               /* priority of the task */
-        &BtScanTask,     /* Task handle to keep track of created task */
-        0                /* pin task to core 0 */
-    );
-}
-
-void BtScanTaskCode(void* pvParameters) {
-    Serial.println("Scanning BT devices");
-
-    pScan->start(CFG_BT_SCAN_DURATION);
-    vTaskDelete(BtScanTask);
-
-    // This should't be reached...
-    for (;;) {
-        Serial.println("waiting for death...");
-        task_sleep(100);
-    }
 }
 
 void startNtpSyncTask() {

@@ -73,8 +73,8 @@ void loop() {
     // Scan devices, then compare with saved devices and read data.
     // do scan and read
 
-    runBtScan();
-    task_sleep(500);
+    Serial.println("Scanning BT devices");
+    pScan->start(CFG_BT_SCAN_DURATION);
 
     while (pScan->isScanning()) {
         Serial.print(".");
@@ -125,8 +125,6 @@ void loop() {
 
         if(!readCurrent && !readHistory) {
             Serial.println("No new data");
-            Serial.printf("  exp. update: %u\n", expectedUpdateAt);
-            Serial.printf("  rc: %u, %u\n", readCurrent, readHistory);
             break; // no new measurements
         }
 
