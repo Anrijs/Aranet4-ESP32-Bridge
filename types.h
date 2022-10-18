@@ -42,7 +42,7 @@ typedef struct AranetDevice {
         }
 
         JsonObject device = devices.createNestedObject();
-        device["mac"] = addr.toString().c_str();
+        device["mac"] = String(addr.toString().c_str()); // make string because, otherrwise it will use same mac for all devices. 
         device["name"] = name;
 
         JsonObject settings = device.createNestedObject("settings");
