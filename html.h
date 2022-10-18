@@ -201,7 +201,7 @@ const char* devicesScript = R"(
         }
 
         function addDevice(devicemac) {
-            fetch("/devices/add", { method: "POST", headers: { "Content-Type": "application/x-www-form-urlencoded" }, body: "devicemac=" + devicemac })
+            fetch("/devices_add", { method: "POST", headers: { "Content-Type": "application/x-www-form-urlencoded" }, body: "devicemac=" + devicemac })
                 .then((response) => response.text())
                 .then((dataStr) => {
                     if (dataStr != "OK") {
@@ -217,7 +217,7 @@ const char* devicesScript = R"(
 
         function toggleParam(param, devicemac, state) {
             let val = state == "checked" ? 0 : 1; // invert
-            fetch("/devices/set", { method: "POST", headers: { "Content-Type": "application/x-www-form-urlencoded" }, body: "devicemac=" + devicemac + "&" + param + "=" + val })
+            fetch("/devices_set", { method: "POST", headers: { "Content-Type": "application/x-www-form-urlencoded" }, body: "devicemac=" + devicemac + "&" + param + "=" + val })
                 .then((response) => response.text())
                 .then((dataStr) => {
                     if (dataStr != "OK") {
@@ -232,7 +232,7 @@ const char* devicesScript = R"(
         }
 
         function fetchResults() {
-            fetch("/devices/list")
+            fetch("/devices_list")
                 .then((response) => response.text())
                 .then((dataStr) => {
                     // split new and saved
@@ -274,7 +274,7 @@ const char* devicesScript = R"(
         }
 
         function pairDevice(devicemac) {
-            fetch("/devices/pair", { method: "POST", headers: { "Content-Type": "application/x-www-form-urlencoded" }, body: "devicemac=" + devicemac })
+            fetch("/devices_pair", { method: "POST", headers: { "Content-Type": "application/x-www-form-urlencoded" }, body: "devicemac=" + devicemac })
                 .then((response) => response.text())
                 .then((dataStr) => {
                     if (dataStr != "OK") {
@@ -283,7 +283,7 @@ const char* devicesScript = R"(
                     }
                     let pin = prompt("Enter PIN");
                     if (pin > 0) {
-                        fetch("/devices/pair", { method: "POST", headers: { "Content-Type": "application/x-www-form-urlencoded" }, body: "devicemac=" + devicemac + "&pin=" + pin })
+                        fetch("/devices_pair", { method: "POST", headers: { "Content-Type": "application/x-www-form-urlencoded" }, body: "devicemac=" + devicemac + "&pin=" + pin })
                             .then((response) => response.text())
                             .then((dataStr) => {
                                 alert(dataStr);

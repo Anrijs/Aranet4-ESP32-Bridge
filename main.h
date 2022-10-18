@@ -4,7 +4,7 @@
 
 #include <EEPROM.h>
 #include <WiFi.h>
-#include <WebServer.h>
+#include <ESPAsyncWebServer.h>
 #include <Preferences.h>
 #include "SPIFFS.h"
 #include <rom/rtc.h>
@@ -36,7 +36,7 @@ char* www_password;
 // ---------------------------------------------------
 Preferences prefs;
 
-WebServer server(80);
+AsyncWebServer server(80);
 
 MyAranet4Callbacks ar4callbacks;
 std::vector<AranetDevice*> ar4devices;
@@ -77,7 +77,7 @@ void devicesSave();
 int createInfluxClient();
 bool getBootWiFiMode();
 bool startWebserver();
-bool webAuthenticate();
+bool webAuthenticate(AsyncWebServerRequest *request);
 bool isManualIp();
 void task_sleep(uint32_t ms);
 void runBtScan();
@@ -312,7 +312,7 @@ String printDevices() {
         page += String(index++) + ";";
         page += d->csv();
     }
-    
+
     page += "\n#new";
     index = 0;
 
@@ -323,11 +323,6 @@ String printDevices() {
     }
 
     return page;
-}
-
-
-void handleNotFound() {
-    server.send(404, "text/html", "404");
 }
 
 bool setupWiFi() {
@@ -387,7 +382,7 @@ void startWebserverTask() {
 bool setupWifiAndWebserver(bool restart = false) {
     if (restart) {
         WiFi.disconnect();
-        server.close();
+        server.end();
     }
 
     if (setupWiFi()) {
@@ -411,7 +406,7 @@ bool setupWifiAndWebserver(bool restart = false) {
     return true;
 }
 
-bool webAuthenticate() {
+bool webAuthenticate(AsyncWebServerRequest *request) {
     if (!www_username) {
         String str = prefs.getString(PREF_K_LOGIN_USER, CFG_DEF_LOGIN_USER);
         int len = str.length() + 1;
@@ -432,128 +427,128 @@ bool webAuthenticate() {
         memcpy(www_password, str.c_str(), len);
     }
 
-    return server.authenticate(www_username, www_password);
+    return request->authenticate(www_username, www_password);
 }
 
 bool startWebserver() {
     // setup webserver handles
-    server.on("/", HTTP_GET, []() {
-        if (!webAuthenticate()) return server.requestAuthentication();
-        server.send(200, "text/html", printHtmlIndex(ar4devices));
+    server.on("/", HTTP_GET, [](AsyncWebServerRequest *request) {
+        if (!webAuthenticate(request)) return request->requestAuthentication();
+        request->send(200, "text/html", printHtmlIndex(ar4devices));
     });
 
-    server.on("/settings", HTTP_GET, []() {
-        if (!webAuthenticate()) return server.requestAuthentication();
-        server.send(200, "text/html", printHtmlConfig(&prefs));
+    server.on("/settings", HTTP_GET, [](AsyncWebServerRequest *request) {
+        if (!webAuthenticate(request)) return request->requestAuthentication();
+        request->send(200, "text/html", printHtmlConfig(&prefs));
     });
 
-    server.on("/settings", HTTP_POST, []() {
-        if (!webAuthenticate()) return server.requestAuthentication();
+    server.on("/settings", HTTP_POST, [](AsyncWebServerRequest *request) {
+        if (!webAuthenticate(request)) return request->requestAuthentication();
 
         // process data...
 
         // Generic
-        if (server.hasArg(PREF_K_SYS_NAME))     {
-            prefs.putString(PREF_K_SYS_NAME, server.arg(PREF_K_SYS_NAME));
+        if (request->hasArg(PREF_K_SYS_NAME))     {
+            prefs.putString(PREF_K_SYS_NAME, request->arg(PREF_K_SYS_NAME));
         }
-        if (server.hasArg(PREF_K_NTP_URL))      {
-            prefs.putString(PREF_K_NTP_URL, server.arg(PREF_K_NTP_URL));
+        if (request->hasArg(PREF_K_NTP_URL))      {
+            prefs.putString(PREF_K_NTP_URL, request->arg(PREF_K_NTP_URL));
         }
 
         // Network
-        if (server.hasArg(PREF_K_WIFI_SSID))     {
-            prefs.putString(PREF_K_WIFI_SSID, server.arg(PREF_K_WIFI_SSID));
+        if (request->hasArg(PREF_K_WIFI_SSID))     {
+            prefs.putString(PREF_K_WIFI_SSID, request->arg(PREF_K_WIFI_SSID));
         }
-        if (server.hasArg(PREF_K_WIFI_PASSWORD)) {
-            prefs.putString(PREF_K_WIFI_PASSWORD, server.arg(PREF_K_WIFI_PASSWORD));
+        if (request->hasArg(PREF_K_WIFI_PASSWORD)) {
+            prefs.putString(PREF_K_WIFI_PASSWORD, request->arg(PREF_K_WIFI_PASSWORD));
         }
 
         // IP
-        prefs.putBool(PREF_K_WIFI_IP_STATIC, server.hasArg(PREF_K_WIFI_IP_STATIC));
-        if (server.hasArg(PREF_K_WIFI_IP_ADDR)) {
-            prefs.putUInt(PREF_K_WIFI_IP_ADDR, str2ip(server.arg(PREF_K_WIFI_IP_ADDR)));
+        prefs.putBool(PREF_K_WIFI_IP_STATIC, request->hasArg(PREF_K_WIFI_IP_STATIC));
+        if (request->hasArg(PREF_K_WIFI_IP_ADDR)) {
+            prefs.putUInt(PREF_K_WIFI_IP_ADDR, str2ip(request->arg(PREF_K_WIFI_IP_ADDR)));
         }
-        if (server.hasArg(PREF_K_WIFI_IP_MASK)) {
-            prefs.putUInt(PREF_K_WIFI_IP_MASK, str2ip(server.arg(PREF_K_WIFI_IP_MASK)));
+        if (request->hasArg(PREF_K_WIFI_IP_MASK)) {
+            prefs.putUInt(PREF_K_WIFI_IP_MASK, str2ip(request->arg(PREF_K_WIFI_IP_MASK)));
         }
-        if (server.hasArg(PREF_K_WIFI_IP_GW)) {
-            prefs.putUInt(PREF_K_WIFI_IP_GW, str2ip(server.arg(PREF_K_WIFI_IP_GW)));
+        if (request->hasArg(PREF_K_WIFI_IP_GW)) {
+            prefs.putUInt(PREF_K_WIFI_IP_GW, str2ip(request->arg(PREF_K_WIFI_IP_GW)));
         }
-        if (server.hasArg(PREF_K_WIFI_IP_DNS)) {
-            prefs.putUInt(PREF_K_WIFI_IP_DNS, str2ip(server.arg(PREF_K_WIFI_IP_DNS)));
+        if (request->hasArg(PREF_K_WIFI_IP_DNS)) {
+            prefs.putUInt(PREF_K_WIFI_IP_DNS, str2ip(request->arg(PREF_K_WIFI_IP_DNS)));
         }
 
         // Influx
-        if (server.hasArg(PREF_K_INFLUX_URL)) {
-            prefs.putString(PREF_K_INFLUX_URL, server.arg(PREF_K_INFLUX_URL));
+        if (request->hasArg(PREF_K_INFLUX_URL)) {
+            prefs.putString(PREF_K_INFLUX_URL, request->arg(PREF_K_INFLUX_URL));
         }
-        if (server.hasArg(PREF_K_INFLUX_ORG)) {
-            prefs.putString(PREF_K_INFLUX_ORG, server.arg(PREF_K_INFLUX_ORG));
+        if (request->hasArg(PREF_K_INFLUX_ORG)) {
+            prefs.putString(PREF_K_INFLUX_ORG, request->arg(PREF_K_INFLUX_ORG));
         }
-        if (server.hasArg(PREF_K_INFLUX_TOKEN)) {
-            prefs.putString(PREF_K_INFLUX_TOKEN, server.arg(PREF_K_INFLUX_TOKEN));
+        if (request->hasArg(PREF_K_INFLUX_TOKEN)) {
+            prefs.putString(PREF_K_INFLUX_TOKEN, request->arg(PREF_K_INFLUX_TOKEN));
         }
-        if (server.hasArg(PREF_K_INFLUX_BUCKET)) {
-            prefs.putString(PREF_K_INFLUX_BUCKET, server.arg(PREF_K_INFLUX_BUCKET));
+        if (request->hasArg(PREF_K_INFLUX_BUCKET)) {
+            prefs.putString(PREF_K_INFLUX_BUCKET, request->arg(PREF_K_INFLUX_BUCKET));
         }
-        if (server.hasArg(PREF_K_INFLUX_LOG))     {
-            prefs.putUShort(PREF_K_INFLUX_LOG, server.arg(PREF_K_INFLUX_LOG).toInt());
+        if (request->hasArg(PREF_K_INFLUX_LOG))     {
+            prefs.putUShort(PREF_K_INFLUX_LOG, request->arg(PREF_K_INFLUX_LOG).toInt());
         }
-        prefs.putUChar(PREF_K_INFLUX_DBVER, server.hasArg(PREF_K_INFLUX_DBVER) ? 2 : 1);
+        prefs.putUChar(PREF_K_INFLUX_DBVER, request->hasArg(PREF_K_INFLUX_DBVER) ? 2 : 1);
 
         // MQTT
-        if (server.hasArg(PREF_K_MQTT_SERVER)) {
-            prefs.putUInt(PREF_K_MQTT_SERVER, str2ip(server.arg(PREF_K_MQTT_SERVER)));
+        if (request->hasArg(PREF_K_MQTT_SERVER)) {
+            prefs.putUInt(PREF_K_MQTT_SERVER, str2ip(request->arg(PREF_K_MQTT_SERVER)));
         }
-        if (server.hasArg(PREF_K_MQTT_PORT)) {
-            prefs.putUShort(PREF_K_MQTT_PORT, server.arg(PREF_K_MQTT_PORT).toInt());
+        if (request->hasArg(PREF_K_MQTT_PORT)) {
+            prefs.putUShort(PREF_K_MQTT_PORT, request->arg(PREF_K_MQTT_PORT).toInt());
         }
-        if (server.hasArg(PREF_K_MQTT_USER)) {
-            prefs.putString(PREF_K_MQTT_USER, server.arg(PREF_K_MQTT_USER));
+        if (request->hasArg(PREF_K_MQTT_USER)) {
+            prefs.putString(PREF_K_MQTT_USER, request->arg(PREF_K_MQTT_USER));
         }
-        if (server.hasArg(PREF_K_MQTT_PASSWORD)) {
-            prefs.putString(PREF_K_MQTT_PASSWORD, server.arg(PREF_K_MQTT_PASSWORD));
+        if (request->hasArg(PREF_K_MQTT_PASSWORD)) {
+            prefs.putString(PREF_K_MQTT_PASSWORD, request->arg(PREF_K_MQTT_PASSWORD));
         }
 
         createInfluxClient();
         ntpSyncTime = 0; // sync now
         ntpSyncFails = 0;
 
-        server.send(200, "text/html", printHtmlConfig(&prefs, true));
+        request->send(200, "text/html", printHtmlConfig(&prefs, true));
     });
 
-    server.on("/data", HTTP_GET, []() {
-        if (!webAuthenticate()) return server.requestAuthentication();
+    server.on("/data", HTTP_GET, [](AsyncWebServerRequest *request) {
+        if (!webAuthenticate(request)) return request->requestAuthentication();
 
-        server.send(200, "text/plain", printData());
+        request->send(200, "text/plain", printData());
     });
 
-    server.on("/devices", HTTP_GET, []() {
-        if (!webAuthenticate()) return server.requestAuthentication();
+    server.on("/devices", HTTP_GET, [](AsyncWebServerRequest *request) {
+        if (!webAuthenticate(request)) return request->requestAuthentication();
 
-        server.send(200, "text/html", printDevicesPage());
+        request->send(200, "text/html", printDevicesPage());
     });
 
-    server.on("/devices/list", HTTP_GET, []() {
-        if (!webAuthenticate()) return server.requestAuthentication();
+    server.on("/devices_list", HTTP_GET, [](AsyncWebServerRequest *request) {
+        if (!webAuthenticate(request)) return request->requestAuthentication();
 
-        server.send(200, "text/plain", printDevices());
+        request->send(200, "text/plain", printDevices());
     });
 
-    server.on("/devices/pair", HTTP_POST, []() {
-        if (!webAuthenticate()) return server.requestAuthentication();
+    server.on("/devices_pair", HTTP_POST, [](AsyncWebServerRequest *request) {
+        if (!webAuthenticate(request)) return request->requestAuthentication();
 
-        if (!server.hasArg("devicemac")) {
-            server.send(200, "text/html", "no mac address");
+        if (!request->hasArg("devicemac")) {
+            request->send(200, "text/html", "no mac address");
             return;
         }
 
-        String devicemac = server.arg("devicemac");
+        String devicemac = request->arg("devicemac");
         NimBLEAddress addr(devicemac.c_str());
         AranetDevice* d = findSavedDevice(addr);
 
         if (!d) {
-            server.send(200, "text/html", "unknown mac");
+            request->send(200, "text/html", "unknown mac");
             return;
         }
 
@@ -561,14 +556,14 @@ bool startWebserver() {
         if (pScan->isScanning()) pScan->stop();
 
         uint32_t pin = -1;
-        if (server.hasArg("pin")) {
-            pin = server.arg("pin").toInt();
+        if (request->hasArg("pin")) {
+            pin = request->arg("pin").toInt();
         }
 
         Serial.println("Begin pair");
 
         if (d->paired) {
-            server.send(200, "text/html", "Already paired.");
+            request->send(200, "text/html", "Already paired.");
         } else {
             if (pin != -1) {
                 Serial.println("recvd PIN");
@@ -596,7 +591,7 @@ bool startWebserver() {
 
                 ar4.disconnect();
                 Serial.println(result);
-                server.send(200, "text/html", result);
+                request->send(200, "text/html", result);
             } else {
                 Serial.printf("Connecting to device: %s\n", addr.toString().c_str());
                 ar4callbacks.providePin(-1); // reset pin
@@ -612,30 +607,30 @@ bool startWebserver() {
                 }
 
                 if (adv && ar4.connect(adv, false) == AR4_OK) {
-                    server.send(200, "text/html", "OK");
+                    request->send(200, "text/html", "OK");
                     ar4.secureConnection();
                 } else {
-                    server.send(200, "text/html", "Connection failed");
+                    request->send(200, "text/html", "Connection failed");
                 }
             }
         }
 
     });
 
-    server.on("/devices/add", HTTP_POST, []() {
-        if (!webAuthenticate()) return server.requestAuthentication();
+    server.on("/devices_add", HTTP_POST, [](AsyncWebServerRequest *request) {
+        if (!webAuthenticate(request)) return request->requestAuthentication();
 
-        if (!server.hasArg("devicemac")) {
-            server.send(200, "text/html", "no mac address");
+        if (!request->hasArg("devicemac")) {
+            request->send(200, "text/html", "no mac address");
             return;
         }
 
-        String devicemac = server.arg("devicemac");
+        String devicemac = request->arg("devicemac");
         NimBLEAddress addr(devicemac.c_str());
         AranetDevice* d = findScannedDevice(addr);
 
         if (!d) {
-            server.send(200, "text/html", "unknown mac");
+            request->send(200, "text/html", "unknown mac");
             return;
         }
 
@@ -647,47 +642,47 @@ bool startWebserver() {
         );
 
         devicesSave();
-        server.send(200, "text/html", "OK");
+        request->send(200, "text/html", "OK");
     });
 
-    server.on("/devices/set", HTTP_POST, []() {
-        if (!webAuthenticate()) return server.requestAuthentication();
+    server.on("/devices_set", HTTP_POST, [](AsyncWebServerRequest *request) {
+        if (!webAuthenticate(request)) return request->requestAuthentication();
 
-        if (!server.hasArg("devicemac")) {
-            server.send(200, "text/html", "no mac address");
+        if (!request->hasArg("devicemac")) {
+            request->send(200, "text/html", "no mac address");
             return;
         }
 
-        String devicemac = server.arg("devicemac");
+        String devicemac = request->arg("devicemac");
         NimBLEAddress addr(devicemac.c_str());
 
         AranetDevice* d = findSavedDevice(addr);
 
         if (!d) {
-            server.send(200, "text/html", "unknown mac");
+            request->send(200, "text/html", "unknown mac");
             return;
         }
 
         int changed = 0;
 
-        if (server.hasArg("enabled")) {
-            bool en = server.arg("enabled").toInt();
+        if (request->hasArg("enabled")) {
+            bool en = request->arg("enabled").toInt();
             if (d->enabled != en) {
                 ++changed;
                 d->enabled = en;
             }
         }
 
-        if (server.hasArg("history")) {
-            bool en = server.arg("history").toInt();
+        if (request->hasArg("history")) {
+            bool en = request->arg("history").toInt();
             if (d->history != en) {
                 ++changed;
                 d->history = en;
             }
         }
 
-        if (server.hasArg("gatt")) {
-            bool en = server.arg("gatt").toInt();
+        if (request->hasArg("gatt")) {
+            bool en = request->arg("gatt").toInt();
             if (d->gatt != en) {
                 ++changed;
                 d->gatt = en;
@@ -697,34 +692,34 @@ bool startWebserver() {
         if (changed) {
             devicesSave();
         }
-        server.send(200, "text/html", "OK");
+        request->send(200, "text/html", "OK");
     });
 
-    server.on("/clrbnd", HTTP_GET, []() {
-        if (!webAuthenticate()) return server.requestAuthentication();
+    server.on("/clrbnd", HTTP_GET, [](AsyncWebServerRequest *request) {
+        if (!webAuthenticate(request)) return request->requestAuthentication();
 
         ble_store_clear();
         wipeStoredDevices();
-        server.send(200, "text/html", "removed paired devices");
+        request->send(200, "text/html", "removed paired devices");
     });
 
-    server.on("/restart", HTTP_GET, []() {
-        if (!webAuthenticate()) return server.requestAuthentication();
+    server.on("/restart", HTTP_GET, [](AsyncWebServerRequest *request) {
+        if (!webAuthenticate(request)) return request->requestAuthentication();
 
-        server.send(200, "text/html", "restarting...");
+        request->send(200, "text/html", "restarting...");
         delay(1000);
         ESP.restart();
     });
 
-    server.on("/force", HTTP_GET, []() {
-        if (!webAuthenticate()) return server.requestAuthentication();
+    server.on("/force", HTTP_GET, [](AsyncWebServerRequest *request) {
+        if (!webAuthenticate(request)) return request->requestAuthentication();
 
-        if (!server.hasArg("mac")) {
-            server.send(200, "text/html", "no mac");
+        if (!request->hasArg("mac")) {
+            request->send(200, "text/html", "no mac");
             return;
         }
 
-        NimBLEAddress addr(server.arg("id").c_str());
+        NimBLEAddress addr(request->arg("id").c_str());
 
         uint8_t mac[6];
         memcpy(mac, addr.getNative(), 6);
@@ -732,20 +727,20 @@ bool startWebserver() {
         AranetDevice* d = findSavedDevice(mac);
 
         if (!d) {
-            server.send(200, "text/html", "invalid mac");
-            return;      
+            request->send(200, "text/html", "invalid mac");
+            return;
         }
 
         uint16_t count = 2048; // max
-        if (server.hasArg("count")) {
-            count = server.arg("count").toInt();
+        if (request->hasArg("count")) {
+            count = request->arg("count").toInt();
         }
 
         char buf[40];
         sprintf(buf, "Will download %u records...", count);
-        server.send(200, "text/html", buf);
+        request->send(200, "text/html", buf);
 
-        d->pending = count;    
+        d->pending = count;
     });
 
     // Image resources
@@ -756,7 +751,10 @@ bool startWebserver() {
         server.serveStatic("/devices.json", SPIFFS, "/devices.json", "max-age=1"); // no cache
     }
 
-    server.onNotFound(handleNotFound);
+    server.onNotFound([](AsyncWebServerRequest *request) {
+      request->send(404, "text/html", "404");
+    });
+
     server.begin();
 
     return true;
@@ -777,7 +775,7 @@ void runBtScan() {
         3,               /* priority of the task */
         &BtScanTask,     /* Task handle to keep track of created task */
         0                /* pin task to core 0 */
-    );              
+    );
 }
 
 void BtScanTaskCode(void* pvParameters) {
@@ -850,7 +848,6 @@ void WiFiTaskCode(void * pvParameters) {
         if (!isAp && WiFi.status() != WL_CONNECTED) {
             setupWifiAndWebserver(true);
         }
-        server.handleClient();
         task_sleep(1);
     }
 }
@@ -991,7 +988,7 @@ void registerScannedDevice(NimBLEAdvertisedDevice* adv) {
             newDevices.push_back(dev);
         }
     }
-    
+
     if (dev) {
         dev->lastSeen = millis();
         dev->rssi = rssi;
