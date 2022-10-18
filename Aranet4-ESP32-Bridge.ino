@@ -114,15 +114,19 @@ void loop() {
             break; // device not saved
         }
 
+        if (!d->enabled) {
+            Serial.printf("Dont read from %s. Not enabled\n",adv.getAddress().toString().c_str());
+            break;
+        }
+
         long expectedUpdateAt = d->updated + ((d->data.interval - d->data.ago) * 1000);
         bool readCurrent = !(millis() < expectedUpdateAt && d->updated > 0);
-        bool readHistory = d->pending > 0;
+        bool readHistory = d->history && d->pending > 0;
 
         if(!readCurrent && !readHistory) {
             Serial.println("No new data");
             Serial.printf("  exp. update: %u\n", expectedUpdateAt);
             Serial.printf("  rc: %u, %u\n", readCurrent, readHistory);
-
             break; // no new measurements
         }
 
@@ -133,6 +137,8 @@ void loop() {
         while (ar4.isConnected() && disconnectTimeout > millis()) task_sleep(10);
 
         bool dataOk = false;
+        bool didRead = false;
+
         if (hasManufacturerData) {
             // read from beacon
             Serial.print("Read from beacon data ");
@@ -141,12 +147,14 @@ void loop() {
             uint16_t len = sizeof(AranetData);
             memcpy(&d->data, (void*) cManufacturerData + 10, len);
             dataOk = true;
-        } else {
+            didRead = true;
+        } else if (d->gatt) { // gatt must be enabled to allow reading by cinencting
             // read from gatt
             Serial.print("Connecting to ");
             Serial.print(d->name);
 
             ar4_err_t status = ar4.connect(adv.getAddress(), d->paired);
+            didRead = true;
 
             if (status == AR4_OK) {
                 d->data = ar4.getCurrentReadings();
@@ -157,22 +165,24 @@ void loop() {
             }
         }
 
-        if (dataOk && d->data.co2 != 0) {
+        if (didRead && dataOk && d->data.co2 != 0) {
             Serial.printf("  CO2: %i\n  T:  %.2f\n", d->data.co2, d->data.temperature / 20.0);
 
             // Check how many records might have been skipped
-            long mStart = millis();
-            int newRecords = d->pending;
-            if (newRecords == 0) newRecords = (((mStart - d->updated) / 1000) / d->data.interval) - 1;
+            if (d->history) {
+                long mStart = millis();
+                int newRecords = d->pending;
+                if (newRecords == 0) newRecords = (((mStart - d->updated) / 1000) / d->data.interval) - 1;
 
-            if (d->updated != 0 && newRecords > 0) {
-                Serial.printf("I see missed %i records\n", newRecords);
+                if (d->updated != 0 && newRecords > 0) {
+                    Serial.printf("I see missed %i records\n", newRecords);
 
-                int result = downloadHistory(&ar4, d, newRecords);
-                if (result >= 0) {
-                    Serial.printf("Dwonlaoded %d logs\n", result);
-                } else {
-                    Serial.println("Couldn't read history");
+                    int result = downloadHistory(&ar4, d, newRecords);
+                    if (result >= 0) {
+                        Serial.printf("Dwonlaoded %d logs\n", result);
+                    } else {
+                        Serial.println("Couldn't read history");
+                    }
                 }
             }
 

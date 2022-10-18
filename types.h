@@ -13,7 +13,11 @@ enum DeviceType {
 typedef struct AranetDevice { 
     NimBLEAddress addr;
     char name[24];
+
+    // pair status
     bool paired;
+
+    // toggles
     bool enabled;
     bool gatt;
     bool history;
@@ -50,6 +54,27 @@ typedef struct AranetDevice {
 
     bool equals(NimBLEAddress address) {
         return addr.equals(address);
+    }
+
+    String csv() {
+        String page = String(addr.toString().c_str());
+        page += ";";
+        page += String(name);
+        page += ";";
+        page += String(rssi);
+        page +=";";
+        page += String(millis() - lastSeen);
+        page += ";";
+
+        // flags
+        if (enabled) page += 'e';
+        if (paired)  page += 'p';
+        if (history) page += 'h';
+        if (gatt)    page += 'g';
+
+        page += ";";
+
+        return page;
     }
 };
 

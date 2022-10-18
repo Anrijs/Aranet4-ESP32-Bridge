@@ -17,6 +17,7 @@ const char* htmlHeader =
     ".imgbtn{padding:2px 4px;}"
     ".content{margin: 0 auto; max-width: 800px;}"
     "table,tr,th,td{border-collapse:collapse;border:solid 1px #bbb;margin: 16px 0;}td{padding:4px}"
+    "table{width:100%}"
     ".card{margin: 24px;background: #fff;font-color:#333;}"
     ".cardtop{height: 4px;background: #aaa;}"
     ".cardtop.en{background: #079851;}"
@@ -72,75 +73,229 @@ const char* cfgScript =
     "toggleStaticCfg(staticIpCb.checked);"
     "</script>";
 
-const char* scanResultsHtml =
-    "<table id=\"results\">"
-    "<tr><th>Name</th><th>RSSI</th><th>Address</th><th></th></tr>"
+const char* savedDevicesHtml =
+    "<table>"
+    "<tr><th>Address</th><th>Name</th><th>RSSI</th><th>Last seen</th><th></th></tr>"
+    "<tbody id=\"saved\"></tbody>"
     "</table>";
 
-const char* scanResultsScript =
-    "<script>"
-    "var failed = 0;"
+const char* newDevicesHtml =
+    "<table>"
+    "<tr><th>Address</th><th>Name</th><th>RSSI</th><th>Last seen</th><th></th></tr>"
+    "<tbody id=\"new\"></tbody>"
+    "</table>";
 
-    "let table = document.getElementById(\"results\");"
-    "let status = document.getElementById(\"status\");"
+const char* indexScript = R"(
+    <script>
+    function updateCards() {
+        fetch("/data")
+            .then(response => response.text())
+            .then((dataStr) => {
+            let lines = dataStr.split("\n");
+            var nextUpdate = 300;
+            for (let ln of lines) {
+                let pt = ln.split(";");
+                if (pt.length < 11) {
+                    continue;
+                }
 
-    "function fetchResults() {"
-      "fetch(\"/scanresults\")"
-          ".then(response => response.text()) "
-          ".then((dataStr) => {"
-              "let rows = table.rows;"
-              "var i = rows.length;"
-              "while (--i) {"
-                  "rows[i].parentNode.removeChild(rows[i]);"
-              "}"
-              "let lines = dataStr.split(\"\\n\");"
-              "let running = lines[0] == \"running\";"
-              "status.innerHTML = lines[0];"
-              "lines.shift();"
-              "for (let line of lines) {"
-                  "let parts = line.split(\";\");"
-                  "let row = table.insertRow();"
-                  "row.insertCell(0).innerHTML = parts[3];"
-                  "row.insertCell(1).innerHTML = parts[2];"
-                  "row.insertCell(2).innerHTML = parts[1];"
-                  "let txt4 = (parts[4] == 1) ? 'Paired' : running ? 'scanning...' : '<a href=\"#\" onclick=\"pairDevice(`' + parts[1] + '`);\">Pair device</a>';"
-                  "row.insertCell(3).innerHTML = txt4;"
-              "}"
-              "setTimeout(fetchResults, 1000);"
-          "})"
-          ".catch(function(err) {"
-              "if (failed++ < 2) {"
-                  "console.log('fetch failed. retry.');"
-                  "setTimeout(fetchResults, 1000);"
-              "} else {"
-                  "status.innerHTML = \"stopped (conn reset)\";"
-              "}"
-          "});"
-    "}"
+                let uid = pt[0];
+                let en = pt[1];
 
-    "function pairDevice(devicemac) {"
-        "fetch('/pair', {method: 'POST', headers: {'Content-Type': 'application/x-www-form-urlencoded'}, body: \"devicemac=\" + devicemac})"
-        ".then(response => response.text())"
-        ".then((dataStr) => {"
-            "if (dataStr != 'OK') {"
-                "alert(dataStr);"
-                "return;"
-            "}"
-            "let pin = prompt(\"Enter PIN\");"
-            "if (pin > 0) {"
-                "fetch('/pair', {method: 'POST', headers: {'Content-Type': 'application/x-www-form-urlencoded'}, body: \"devicemac=\" + devicemac + \"&pin=\" + pin})"
-                ".then(response => response.text())"
-                ".then((dataStr) => {"
-                    "alert(dataStr);"
-                    "fetchResults();"
-                "});"
-            "}"
-        "});"
-    "}"
+                if (!en.includes("e")) continue;
 
-    "setTimeout(fetchResults, 100);"
-    
-    "</script>";
+                let card = document.querySelector(`[data-id*="` + uid + `"]`);
+
+                if (!card) continue;
+
+                let co2 = pt[4];
+                let batt = pt[8];
+
+                var klass = "co2-none";
+                if (co2 == 0) kalss="co2-none";
+                else if (co2 < 1000) klass="co2-ok";
+                else if (co2 < 1400) klass="co2-warn";
+                else klass = "co2-alert";
+
+                var batimg = "";
+
+                if (batt > 90) batimg ="100";
+                else if (batt > 80) batimg ="90";
+                else if (batt > 70) batimg ="80";
+                else if (batt > 60) batimg ="70";
+                else if (batt > 50) batimg ="60";
+                else if (batt > 40) batimg ="50";
+                else if (batt > 30) batimg ="40";
+                else if (batt > 20) batimg ="30";
+                else if (batt > 10) batimg ="20";
+                else batimg = "10";
+                var btimg = "bluetooth";
+                if (pt[11] > (parseInt(pt[9])+5)) {
+                    btimg = "bluetoothred";
+                    klass = "co2-none";
+                }
+                card.getElementsByClassName("cardimg")[0].src = "/img/" + btimg + ".png";
+                card.getElementsByClassName("batt-val")[0].src = "/img/battery_" + batimg + ".png";
+                card.getElementsByClassName("batt-val")[0].title = batt + "%";
+                card.getElementsByClassName("co2-txt")[0].textContent = co2;
+                card.getElementsByClassName("temp-val")[0].textContent = pt[5];
+                card.getElementsByClassName("humi-val")[0].textContent = pt[7];
+                card.getElementsByClassName("pres-val")[0].textContent = pt[6];
+                card.className="card " + klass;
+
+                let u = pt[9] - pt[11]; // 9 = interval, 10 = ago, 11 = real ago
+                if (u<nextUpdate)nextUpdate=u;
+            }
+            setTimeout(updateCards, (nextUpdate+10)*1000);
+            });
+    }
+
+    setTimeout(updateCards, 5000);
+    </script>
+)";
+
+const char* devicesScript = R"(
+    <script>
+        var failed = 0;
+        const savedDevices = document.getElementById("saved");
+        const newDevices = document.getElementById("new");
+
+        function addNewDevice(parts) {
+            //	Address	 Name  RSSI	Last seen  []
+            let row = newDevices.insertRow();
+
+            row.insertCell(0).innerHTML = parts[1];
+            row.insertCell(1).innerHTML = parts[2];
+            row.insertCell(2).innerHTML = parts[3];
+            row.insertCell(3).innerHTML = parts[4] / 1000 + 's ago';
+            row.insertCell(4).innerHTML = `<button onclick="addDevice('${parts[1]}');">Add device</button>`;
+        }
+
+        function addSavedDevice(parts) {
+            // Enabled	Address   Name	RSSI	Last seen   []
+            let row = savedDevices.insertRow();
+
+            row.insertCell(0).innerHTML = parts[1];
+            row.insertCell(1).innerHTML = parts[2];
+            row.insertCell(2).innerHTML = parts[3];
+            row.insertCell(3).innerHTML = parts[4] / 1000 + 's ago';
+
+
+            let utils = "";
+            if (!parts[5].includes("p")) {
+                utils += '<button onclick="pairDevice(`' + parts[1] + '`);">Pair device</button><br>';
+            } else {
+                utils += `<label><input type="checkbox" checked disabled> Paired </label><br>`;
+            }
+
+            let chk = parts[5].includes("e") ? "checked" : "";
+            utils += `<label><input ${chk} type="checkbox" onclick="toggleParam('enabled', '${parts[1]}', '${chk}') "> Enabled </label><br>`;
+
+            chk = parts[5].includes("g") ? "checked" : "";
+            utils += `<label><input ${chk} type="checkbox" onclick="toggleParam('gatt', '${parts[1]}', '${chk}') "> GATT </label><br>`;
+
+            chk = parts[5].includes("h") ? "checked" : "";
+            utils += `<label><input ${chk} type="checkbox" onclick="toggleParam('history', '${parts[1]}', '${chk}') "> History </label><br>`;
+
+            row.insertCell(4).innerHTML = utils;
+        }
+
+        function addDevice(devicemac) {
+            fetch("/devices/add", { method: "POST", headers: { "Content-Type": "application/x-www-form-urlencoded" }, body: "devicemac=" + devicemac })
+                .then((response) => response.text())
+                .then((dataStr) => {
+                    if (dataStr != "OK") {
+                        alert(dataStr);
+                        return;
+                    } else {
+                        // refresh now
+                        clearTimeout(refreshTimeout);
+                        fetchResults();
+                    }
+                });
+        }
+
+        function toggleParam(param, devicemac, state) {
+            let val = state == "checked" ? 0 : 1; // invert
+            fetch("/devices/set", { method: "POST", headers: { "Content-Type": "application/x-www-form-urlencoded" }, body: "devicemac=" + devicemac + "&" + param + "=" + val })
+                .then((response) => response.text())
+                .then((dataStr) => {
+                    if (dataStr != "OK") {
+                        alert(dataStr);
+                        return;
+                    } else {
+                        // refresh now
+                        clearTimeout(refreshTimeout);
+                        fetchResults();
+                    }
+                });
+        }
+
+        function fetchResults() {
+            fetch("/devices/list")
+                .then((response) => response.text())
+                .then((dataStr) => {
+                    // split new and saved
+                    let groups = dataStr.split("#");
+
+                    // clear tables
+                    savedDevices.innerHTML = "";
+                    newDevices.innerHTML = "";
+
+                    for (let i=0;i<groups.length;i++) {
+                        let g = groups[i];
+                        if (!g) continue;
+
+                        let lines = g.split("\n");
+                        if (!lines) continue;
+
+                        let gname = lines[0];
+                        lines.shift();
+
+                        for (let line of lines) {
+                            let parts = line.split(";");
+                            if (parts.length < 6) continue;
+                            if (gname == "new") addNewDevice(parts);
+                            else if (gname == "saved") addSavedDevice(parts);
+                        }
+                    }
+
+                    refreshTimeout = setTimeout(fetchResults, 2000);
+                })
+                .catch(function (err) {
+                    if (failed++ < 2) {
+                        console.log("fetch failed. retry.");
+                        console.log(err);
+                        refreshTimeout = setTimeout(fetchResults, 2000);
+                    } else {
+                        console.log("fetch failed.");
+                    }
+                });
+        }
+
+        function pairDevice(devicemac) {
+            fetch("/devices/pair", { method: "POST", headers: { "Content-Type": "application/x-www-form-urlencoded" }, body: "devicemac=" + devicemac })
+                .then((response) => response.text())
+                .then((dataStr) => {
+                    if (dataStr != "OK") {
+                        alert(dataStr);
+                        return;
+                    }
+                    let pin = prompt("Enter PIN");
+                    if (pin > 0) {
+                        fetch("/devices/pair", { method: "POST", headers: { "Content-Type": "application/x-www-form-urlencoded" }, body: "devicemac=" + devicemac + "&pin=" + pin })
+                            .then((response) => response.text())
+                            .then((dataStr) => {
+                                alert(dataStr);
+                                fetchResults();
+                            });
+                    }
+                });
+        }
+
+        let refreshTimeout = setTimeout(fetchResults, 100);
+            </script>
+)";
 
 String printHtmlLabel(char *name, char* title) {
     char tmp[128];
@@ -168,7 +323,7 @@ String printHtmlCheckboxInput(char *name, char* title, uint32_t value) {
 
 String printCard(String title, String body, String cardimg = "", String fn = "", uint8_t color = 0) {
     String card = "<div ";
-    
+
     if (fn.length() > 0) {
         card += "class=\"card clickable\" onclick=\"" + fn + "\">";
     } else {
@@ -206,23 +361,21 @@ String printAranetCard(AranetDevice* device, int id) {
     } else {
         klass = "co2-alert";
     }
-    
+
     String card = "<div class=\"card " + klass + "\" data-id=\"" + String(id) + "\">";
 
     char buf0[6];
     char buf1[6];
     char buf2[6];
-    char buf3[6];
-    
+    char buf3[8];
+
     sprintf(buf0, "%i", device->data.co2);
     sprintf(buf1, "%.1f", device->data.temperature / 20.0);
     sprintf(buf2, "%i", device->data.humidity);
-    sprintf(buf3, "%i", device->data.pressure);
-    sprintf(buf3, "%i", device->data.pressure);
-    sprintf(buf3, "%i", device->data.pressure);
+    sprintf(buf3, "%.1f", device->data.pressure / 10.0);
 
     String batimg = "";
-    
+
     if (device->data.battery > 90) { batimg = "100"; }
     else if (device->data.battery > 80) { batimg = "90"; }
     else if (device->data.battery > 70) { batimg = "80"; }
@@ -235,12 +388,11 @@ String printAranetCard(AranetDevice* device, int id) {
     else { batimg = "10"; }
 
     String btimg = "bluetooth";
-    // 
     long updatedAgo = (millis() - device->updated) / 1000;
     if (updatedAgo > device->data.interval + 5) {
         btimg = "bluetoothred";
     }
-    
+
     card += "<div class=\"cardtop " + klass + "\"></div>";
     card += "<div class=\"cardbody\">";
     card +=   "<div>";
@@ -276,15 +428,14 @@ String printHtmlIndex(std::vector<AranetDevice*> devices) {
         page += printAranetCard(d, index++);
     }
 
-    page += "<div class=\"card clickable\" onclick=\"page('scan')\">";
+    page += "<div class=\"card clickable\" onclick=\"page('devices')\">";
     page +=   "<div class=\"cardtop\"></div>";
     page +=   "<div class=\"cardbody\">";
-    page +=     "<img src=\"/img/plus.png\" class=\"cardimg\"> <span class=\"cardimg\">Add new device</span>";
+    page +=     "<img src=\"/img/plus.png\" class=\"cardimg\"> <span class=\"cardimg\">Manage devices</span>";
     page +=   "</div>";
     page += "</div>";
 
-    page += String("<script src=\"js/index.js\"></script>");
-
+    page += String(indexScript);
     page += String(htmlFooter);
     return page;
 }
@@ -345,7 +496,7 @@ String printHtmlConfig(Preferences* prefs, bool updated = false) {
         "/img/ok.png",
         "saveConfig()"
     );
-    
+
     page += printCard(
         "Restart", "",
         "/img/restart.png",
@@ -365,13 +516,17 @@ String printHtmlConfig(Preferences* prefs, bool updated = false) {
     return page;
 }
 
-String printScanPage() {
+String printDevicesPage() {
     String page = String(htmlHeader);
     page += printCard(
-        "<b>Scan status: </b><span id=\"status\">unknown</span>",
-        scanResultsHtml
+        "Saved devices",
+        savedDevicesHtml
     );
-    page += String(scanResultsScript);
+        page += printCard(
+        "Discovered devices",
+        newDevicesHtml
+    );
+    page += String(devicesScript);
     page += String(htmlFooter);
 
     return page;

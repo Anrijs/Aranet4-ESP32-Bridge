@@ -93,6 +93,7 @@ void BtScanTaskCode(void* pvParameters);
 void WiFiTaskCode(void* pvParameters);
 void NtpSyncTaskCode(void* pvParameters);
 
+AranetDevice* findScannedDevice(NimBLEAddress macaddr);
 AranetDevice* findSavedDevice(NimBLEAddress macaddr);
 AranetDevice* findSavedDevice(NimBLEAdvertisedDevice adv);
 
@@ -177,6 +178,9 @@ void devicesSave() {
     SPIFFS.remove("/devices.json");
     cfg = SPIFFS.open("/devices.json", FILE_WRITE);
 
+    // clear devices array
+    doc.remove("devices");
+
     for (AranetDevice* d : ar4devices) {
         d->saveConfig(doc);
     }
@@ -187,17 +191,6 @@ void devicesSave() {
 
     // Close the file
     cfg.close();
-}
-
-void saveDevice(NimBLEAddress addr, String name, bool paired) {
-    AranetDevice* d = new AranetDevice();
-    d->paired = paired;
-    d->addr = addr;
-    memcpy(d->name, name.c_str(), 24);
-    
-    ar4devices.push_back(d);
-
-    devicesSave();
 }
 
 /*
@@ -276,6 +269,7 @@ String printData() {
     int index = 0;
     for (AranetDevice* d : ar4devices) {
         page += String(index++) + ";";
+        page += d->enabled ? "e;" : ";";
 
         page += String(d->name);
         page += ";" + String(d->addr.toString().c_str()) + ";";
@@ -295,35 +289,42 @@ String printData() {
     return page;
 }
 
-String printScannedDevices() {
-    String page = String("stopped");
-
+// Deprecated!
+String printNewDevices() {
+    String page = "#new";
     int index = 0;
-    long ms = millis();
+
     for (AranetDevice* d : newDevices) {
         page += "\n";
-        page += String(index);
-        page += ";";
-        page += String(d->addr.toString().c_str());
-        page += ";";
-        page += String(d->rssi);
-        page += ";";
-        page += String(d->name);
-        page += ";";
-        page += String(ms - d->lastSeen);
-        page += ";";
-        //if (d->connectable) page += 'C';
-        //if (d->beacon) page += 'B';
-
-        if (d) {
-        if (d->paired) page += 'P';
-        }
-    
-        page += ";";
+        page += String(index++) + ";";
+        page += d->csv();
     }
 
     return page;
 }
+
+String printDevices() {
+    String page = "#saved";
+    int index = 0;
+
+    for (AranetDevice* d : ar4devices) {
+        page += "\n";
+        page += String(index++) + ";";
+        page += d->csv();
+    }
+    
+    page += "\n#new";
+    index = 0;
+
+    for (AranetDevice* d : newDevices) {
+        page += "\n";
+        page += String(index++) + ";";
+        page += d->csv();
+    }
+
+    return page;
+}
+
 
 void handleNotFound() {
     server.send(404, "text/html", "404");
@@ -431,8 +432,6 @@ bool webAuthenticate() {
         memcpy(www_password, str.c_str(), len);
     }
 
-    Serial.printf("u%s:p:%s\n", www_username, www_password);
-
     return server.authenticate(www_username, www_password);
 }
 
@@ -528,103 +527,177 @@ bool startWebserver() {
 
         server.send(200, "text/plain", printData());
     });
-    server.on("/scan", HTTP_GET, []() {
+
+    server.on("/devices", HTTP_GET, []() {
         if (!webAuthenticate()) return server.requestAuthentication();
 
-        server.send(200, "text/html", printScanPage());
+        server.send(200, "text/html", printDevicesPage());
     });
 
-    server.on("/scanresults", HTTP_GET, []() {
+    server.on("/devices/list", HTTP_GET, []() {
         if (!webAuthenticate()) return server.requestAuthentication();
 
-        server.send(200, "text/plain", printScannedDevices());
+        server.send(200, "text/plain", printDevices());
     });
 
-    server.on("/pair", HTTP_POST, []() {
+    server.on("/devices/pair", HTTP_POST, []() {
         if (!webAuthenticate()) return server.requestAuthentication();
+
+        if (!server.hasArg("devicemac")) {
+            server.send(200, "text/html", "no mac address");
+            return;
+        }
+
+        String devicemac = server.arg("devicemac");
+        NimBLEAddress addr(devicemac.c_str());
+        AranetDevice* d = findSavedDevice(addr);
+
+        if (!d) {
+            server.send(200, "text/html", "unknown mac");
+            return;
+        }
 
         // Abort task
         if (pScan->isScanning()) pScan->stop();
 
         uint32_t pin = -1;
-        bool hasMac = false;
-        String devicemac;
-
         if (server.hasArg("pin")) {
             pin = server.arg("pin").toInt();
         }
 
-        // Generic
-        if (server.hasArg("devicemac")) {
-            hasMac = true;
-            devicemac = server.arg("devicemac");
-        }
+        Serial.println("Begin pair");
 
-        if (hasMac) {
-            Serial.println("Begin pair");
-            NimBLEAddress addr(devicemac.c_str());
+        if (d->paired) {
+            server.send(200, "text/html", "Already paired.");
+        } else {
+            if (pin != -1) {
+                Serial.println("recvd PIN");
+                String result = "Failed";
+                ar4callbacks.providePin(pin);
 
-            if (false /* FIXME Aranet4::isPaired(addr) */) {
-                //Serial.printf("Already paired... %02X:%02X:%02X...\n", addr[0], addr[1], addr[2]);
-                //String ar4name = ar4.getName();
-                //String result = "Connected to " + ar4name;
-                //Serial.println(result);
-                //saveDevice(addr, ar4name, true);
-                //ar4.disconnect();
-                //server.send(200, "text/html", result);
-                server.send(200, "text/html", "Already paired.");
-            } else {
-                if (pin != -1) {
-                    Serial.println("recvd PIN");
-                    String result = "Failed";
-                    ar4callbacks.providePin(pin);
-
-                    String ar4name = ar4.getName();
-                    if (ar4name.length() > 1) {
-                        saveDevice(addr, ar4name, true);
-                        result = "Connected to " + ar4name;
-                    } else {
-                        result = "Failed to get name";
-                        ar4name = ar4.getName();
-                        Serial.println(ar4name);
-                        ar4name = ar4.getSwVersion();
-                        Serial.println(ar4name);
-                        ar4name = ar4.getFwVersion();
-                        Serial.println(ar4name);
-                        ar4name = ar4.getHwVersion();
-                        Serial.println(ar4name);
-                        AranetData meas = ar4.getCurrentReadings();
-                        Serial.printf("MEAS:\n  %i ppm\n", meas.co2);
-                    }
-
-                    ar4.disconnect();
-                    Serial.println(result);
-                    server.send(200, "text/html", result);
+                String ar4name = ar4.getName();
+                if (ar4name.length() > 1) {
+                    result = "Connected to " + ar4name;
+                    d->paired = true;
+                    devicesSave();
                 } else {
-                    Serial.printf("Connecting to device: %s\n", addr.toString().c_str());
-                    ar4callbacks.providePin(-1); // reset pin
+                    result = "Failed to get name";
+                    ar4name = ar4.getName();
+                    Serial.println(ar4name);
+                    ar4name = ar4.getSwVersion();
+                    Serial.println(ar4name);
+                    ar4name = ar4.getFwVersion();
+                    Serial.println(ar4name);
+                    ar4name = ar4.getHwVersion();
+                    Serial.println(ar4name);
+                    AranetData meas = ar4.getCurrentReadings();
+                    Serial.printf("MEAS:\n  %i ppm\n", meas.co2);
+                }
 
-                    NimBLEAdvertisedDevice* adv = nullptr;
-                    NimBLEScanResults results = pScan->getResults();
-                    for (uint32_t i = 0; i < results.getCount(); i++) {
-                        NimBLEAdvertisedDevice ax = results.getDevice(i);
-                        if ((uint64_t) ax.getAddress() == (uint64_t) addr) {
-                            adv = &ax;
-                            break;
-                        }
-                    }
+                ar4.disconnect();
+                Serial.println(result);
+                server.send(200, "text/html", result);
+            } else {
+                Serial.printf("Connecting to device: %s\n", addr.toString().c_str());
+                ar4callbacks.providePin(-1); // reset pin
 
-                    if (adv && ar4.connect(adv, false) == AR4_OK) {
-                        server.send(200, "text/html", "OK");
-                        ar4.secureConnection();
-                    } else {
-                        server.send(200, "text/html", "Connection failed");
+                NimBLEAdvertisedDevice* adv = nullptr;
+                NimBLEScanResults results = pScan->getResults();
+                for (uint32_t i = 0; i < results.getCount(); i++) {
+                    NimBLEAdvertisedDevice ax = results.getDevice(i);
+                    if ((uint64_t) ax.getAddress() == (uint64_t) addr) {
+                        adv = &ax;
+                        break;
                     }
                 }
+
+                if (adv && ar4.connect(adv, false) == AR4_OK) {
+                    server.send(200, "text/html", "OK");
+                    ar4.secureConnection();
+                } else {
+                    server.send(200, "text/html", "Connection failed");
+                }
             }
-        } else {
-            server.send(200, "text/html", "unknown error");
         }
+
+    });
+
+    server.on("/devices/add", HTTP_POST, []() {
+        if (!webAuthenticate()) return server.requestAuthentication();
+
+        if (!server.hasArg("devicemac")) {
+            server.send(200, "text/html", "no mac address");
+            return;
+        }
+
+        String devicemac = server.arg("devicemac");
+        NimBLEAddress addr(devicemac.c_str());
+        AranetDevice* d = findScannedDevice(addr);
+
+        if (!d) {
+            server.send(200, "text/html", "unknown mac");
+            return;
+        }
+
+        // move to saved devices
+        ar4devices.push_back(d);
+        newDevices.erase(
+            std::remove(newDevices.begin(), newDevices.end(), d),
+            newDevices.end()
+        );
+
+        devicesSave();
+        server.send(200, "text/html", "OK");
+    });
+
+    server.on("/devices/set", HTTP_POST, []() {
+        if (!webAuthenticate()) return server.requestAuthentication();
+
+        if (!server.hasArg("devicemac")) {
+            server.send(200, "text/html", "no mac address");
+            return;
+        }
+
+        String devicemac = server.arg("devicemac");
+        NimBLEAddress addr(devicemac.c_str());
+
+        AranetDevice* d = findSavedDevice(addr);
+
+        if (!d) {
+            server.send(200, "text/html", "unknown mac");
+            return;
+        }
+
+        int changed = 0;
+
+        if (server.hasArg("enabled")) {
+            bool en = server.arg("enabled").toInt();
+            if (d->enabled != en) {
+                ++changed;
+                d->enabled = en;
+            }
+        }
+
+        if (server.hasArg("history")) {
+            bool en = server.arg("history").toInt();
+            if (d->history != en) {
+                ++changed;
+                d->history = en;
+            }
+        }
+
+        if (server.hasArg("gatt")) {
+            bool en = server.arg("gatt").toInt();
+            if (d->gatt != en) {
+                ++changed;
+                d->gatt = en;
+            }
+        }
+
+        if (changed) {
+            devicesSave();
+        }
+        server.send(200, "text/html", "OK");
     });
 
     server.on("/clrbnd", HTTP_GET, []() {
@@ -861,6 +934,16 @@ char* getResetReason(RESET_REASON reason) {
     }
 }
 
+AranetDevice* findScannedDevice(NimBLEAddress macaddr) {
+    AranetDevice* d = nullptr;
+
+    for (AranetDevice* d : newDevices) {
+        if (d->addr.equals(macaddr)) return d;
+    }
+
+    return nullptr;
+}
+
 AranetDevice* findSavedDevice(NimBLEAddress macaddr) {
     AranetDevice* d = nullptr;
 
@@ -918,10 +1001,11 @@ void registerScannedDevice(NimBLEAdvertisedDevice* adv) {
 void cleanupScannedDevices() {
     newDevices.erase(
         std::remove_if(
-            newDevices.begin(), newDevices.end(),
-    [](const AranetDevice* d) {
-        return (millis() - d->lastSeen) > 30000; // remove 30s and older
-    }), newDevices.end());
+            newDevices.begin(), newDevices.end(), [](const AranetDevice* d) {
+                return (millis() - d->lastSeen) > 30000; // remove 30s and older
+            }
+        ), newDevices.end()
+    );
 }
 
 void printScannecDevices() {
