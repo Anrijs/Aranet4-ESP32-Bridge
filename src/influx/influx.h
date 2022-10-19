@@ -65,7 +65,6 @@ Point influxCreatePoint(Preferences *prefs, AranetDevice* device, AranetData *da
 Point influxCreatePointWithTimestamp(Preferences *prefs, AranetDevice* device, AranetData *data, long timestamp) {
     Point point = influxCreatePoint(prefs, device, data);
     point.setTime(WRITE_PRECISION);
-    point.setTime(timestamp);
     return point;
 }
 

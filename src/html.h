@@ -85,12 +85,54 @@ const char* newDevicesHtml =
     "<tbody id=\"new\"></tbody>"
     "</table>";
 
+const char* deviceCardHtml = R"(
+    <div class="card co2-none">
+        <div class="cardtop co2-none"></div>
+        <div class="cardbody">
+            <div>
+                <img src="/img/bluetoothred.png" class="cardimg">
+                <span class="cardtitle">Unknown device</span>
+                <span style="float:right;">
+                    <img class="batt-val" src="/img/battery_10.png" title="0%">
+                </span>
+            </div>
+            <div class="co2">
+                <img style="margin-right: 16px; height:32px;" src="/img/co2.png" alt="CO2">
+                <b class="co2-val co2-txt">0</b>
+                <span class="co2-txt">ppm</span>
+            </div>
+            <div style="display: flex;">
+                <div class="cardfl">
+                    <img src="/img/temp.png" alt="Temperature">
+                    <br>
+                    <b class="temp-val" style="font-size: 28px;">0.0</b>&deg;C
+                </div>
+                <div class="cardfl">
+                    <img src="/img/humidity.png" alt="Humidity">
+                    <br>
+                    <b class="humi-val" style="font-size: 28px;">0</b>%</div>
+                    <div class="cardfl">
+                        <img src="/img/pressure.png" alt="Pressure">
+                        <br>
+                        <b class="pres-val" style="font-size: 28px;">0.0</b>hPa
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+)";
+
 const char* indexScript = R"(
-    <script>
+<script>
+    let template = false;
     function updateCards() {
         fetch("/data")
             .then(response => response.text())
             .then((dataStr) => {
+
+            let devices = document.getElementById("devices");
+            devices.innerHTML = ""; // clear old
+
             let lines = dataStr.split("\n");
             var nextUpdate = 300;
             for (let ln of lines) {
@@ -104,9 +146,9 @@ const char* indexScript = R"(
 
                 if (!en.includes("e")) continue;
 
-                let card = document.querySelector(`[data-id*="` + uid + `"]`);
-
-                if (!card) continue;
+                let card = document.createElement('div');
+                card.innerHTML = template;
+                card = card.firstChild;
 
                 let co2 = pt[4];
                 let batt = pt[8];
@@ -134,6 +176,7 @@ const char* indexScript = R"(
                     btimg = "bluetoothred";
                     klass = "co2-none";
                 }
+                card.getElementsByClassName("cardtitle")[0].textContent = pt[2];
                 card.getElementsByClassName("cardimg")[0].src = "/img/" + btimg + ".png";
                 card.getElementsByClassName("batt-val")[0].src = "/img/battery_" + batimg + ".png";
                 card.getElementsByClassName("batt-val")[0].title = batt + "%";
@@ -141,17 +184,27 @@ const char* indexScript = R"(
                 card.getElementsByClassName("temp-val")[0].textContent = pt[5];
                 card.getElementsByClassName("humi-val")[0].textContent = pt[7];
                 card.getElementsByClassName("pres-val")[0].textContent = pt[6];
+
                 card.className="card " + klass;
 
                 let u = pt[9] - pt[11]; // 9 = interval, 10 = ago, 11 = real ago
                 if (u<nextUpdate)nextUpdate=u;
+
+                devices.appendChild(card);
             }
             setTimeout(updateCards, (nextUpdate+10)*1000);
             });
     }
 
-    setTimeout(updateCards, 5000);
-    </script>
+    window.onload = function() {
+        fetch("/devices_template")
+            .then(response => response.text())
+            .then((dataStr) => {
+                template = dataStr.trim();
+                updateCards();
+            });
+    }
+</script>
 )";
 
 const char* devicesScript = R"(
@@ -350,83 +403,12 @@ String printCard(String title, String body, String cardimg = "", String fn = "",
     return card;
 }
 
-String printAranetCard(AranetDevice* device, int id) {
-    String klass = "co2-none";
-    if (device->data.co2 == 0) {
-        klass = "co2-none";
-    }else if (device->data.co2 < 1000) {
-        klass = "co2-ok";
-    } else if (device->data.co2 < 1400) {
-        klass = "co2-warn";
-    } else {
-        klass = "co2-alert";
-    }
-
-    String card = "<div class=\"card " + klass + "\" data-id=\"" + String(id) + "\">";
-
-    char buf0[6];
-    char buf1[6];
-    char buf2[6];
-    char buf3[8];
-
-    sprintf(buf0, "%i", device->data.co2);
-    sprintf(buf1, "%.1f", device->data.temperature / 20.0);
-    sprintf(buf2, "%i", device->data.humidity);
-    sprintf(buf3, "%.1f", device->data.pressure / 10.0);
-
-    String batimg = "";
-
-    if (device->data.battery > 90) { batimg = "100"; }
-    else if (device->data.battery > 80) { batimg = "90"; }
-    else if (device->data.battery > 70) { batimg = "80"; }
-    else if (device->data.battery > 60) { batimg = "70"; }
-    else if (device->data.battery > 50) { batimg = "60"; }
-    else if (device->data.battery > 40) { batimg = "50"; }
-    else if (device->data.battery > 30) { batimg = "40"; }
-    else if (device->data.battery > 20) { batimg = "30"; }
-    else if (device->data.battery > 10) { batimg = "20"; }
-    else { batimg = "10"; }
-
-    String btimg = "bluetooth";
-    long updatedAgo = (millis() - device->updated) / 1000;
-    if (updatedAgo > device->data.interval + 5) {
-        btimg = "bluetoothred";
-    }
-
-    card += "<div class=\"cardtop " + klass + "\"></div>";
-    card += "<div class=\"cardbody\">";
-    card +=   "<div>";
-    card +=     "<img src=\"/img/"+btimg+".png\" class=\"cardimg\">";
-    card +=     "<span class=\"cardtitle\">" + String(device->name) + "</span>";
-    card +=       "<span style=\"float:right;\">";
-    card +=         "<img class=\"batt-val\" src=\"/img/battery_" + batimg + ".png\" class=\"cardimg\" title=\"" + String(device->data.battery) + "%\">";
-    //card +=         "<img src=\"/img/graph.png\" class=\"cardimg\">";
-    //card +=         "<img src=\"/img/settings_dash.png\" class=\"cardimg\">";
-    card +=       "</span>";
-    card +=     "</div>";
-    card +=     "<div class=\"co2\">";
-    card +=       "<img style=\"margin-right: 16px; height:32px;\" src=\"/img/co2.png\" alt=\"CO2\"><b class=\"co2-val co2-txt\"\">" + String(buf0) + "</b><span class=\"co2-txt\">ppm</span>";
-    card +=     "</div>";
-    card +=     "<div style=\"display: flex;\">";
-    card +=       "<div class=\"cardfl\"><img src=\"/img/temp.png\" alt=\"Temperature\"><br><b class=\"temp-val\" style=\"font-size: 28px;\">" + String(buf1) + "</b>°C</div>";
-    card +=       "<div class=\"cardfl\"><img src=\"/img/humidity.png\" alt=\"Humidity\"><br><b class=\"humi-val\" style=\"font-size: 28px;\">" + String(buf2) + "</b>%</div>";
-    card +=       "<div class=\"cardfl\"><img src=\"/img/pressure.png\" alt=\"Pressure\"><br><b class=\"pres-val\" style=\"font-size: 28px;\">" + String(buf3) + "</b>hPa</div>";
-    card +=     "</div>";
-    card +=   "</div>";
-    card += "</div>";
-
-    return card;
-}
-
 String printHtmlIndex(std::vector<AranetDevice*> devices) {
     String page = String(htmlHeader);
     Serial.print("Task1 running on core ");
     Serial.println(xPortGetCoreID());
 
-    int index = 0;
-    for (AranetDevice* d : devices) {
-        page += printAranetCard(d, index++);
-    }
+    page += "<div id=\"devices\"></div>";
 
     page += "<div class=\"card clickable\" onclick=\"page('devices')\">";
     page +=   "<div class=\"cardtop\"></div>";

@@ -741,6 +741,11 @@ bool startWebserver() {
         d->pending = count;
     });
 
+    server.on("/devices_template", HTTP_GET, [](AsyncWebServerRequest *request) {
+        if (!webAuthenticate(request)) return request->requestAuthentication();
+        request->send(200, "text/html", deviceCardHtml);
+    });
+
     // Image resources
     // server static content from images folder with 10 minute cache
     if (spiffsOk) {
@@ -790,18 +795,18 @@ bool ntpSync() {
 void NtpSyncTaskCode(void * pvParameters) {
     for (;;) {
         if (millis() > ntpSyncTime) {
-        if (ntpSync()) {
-            ntpSyncTime = millis() + (CFG_NTP_SYNC_INTERVAL * 60000);
-            ntpSyncFails = 0;
-        } else {
-            if (ntpSyncFails < 2) task_sleep(10000); // 10s
-            else if (ntpSyncFails < 3) task_sleep(30000); //60s
-            else if (ntpSyncFails < 4) task_sleep(60000); //60s
-            else task_sleep(300000); //5m
-            ntpSyncFails++;
-            // sleep 10 seconds
-            continue;
-        }
+            if (ntpSync()) {
+                ntpSyncTime = millis() + (CFG_NTP_SYNC_INTERVAL * 60000);
+                ntpSyncFails = 0;
+            } else {
+                if (ntpSyncFails < 2) task_sleep(10000); // 10s
+                else if (ntpSyncFails < 3) task_sleep(30000); //60s
+                else if (ntpSyncFails < 4) task_sleep(60000); //60s
+                else task_sleep(300000); //5m
+                ntpSyncFails++;
+                // sleep 10 seconds
+                continue;
+            }
         }
         task_sleep(60000); // sleep 1 minute
     }
