@@ -1,5 +1,5 @@
 # Aranet4-ESP32 Bridge
-Connect your Aranet4 to ESP32 and view measurements in browser or send them to InfluxDB and MQTT server.
+Connect your Aranet4 to ESP32 and view measurements in browser or send them to InfluxDB and MQTT server.  
 
 ## Installation
 1. Set up [Arduino](https://www.arduino.cc/) with [ESP32 board library](https://github.com/espressif/arduino-esp32) (tested on v1.0.6)
