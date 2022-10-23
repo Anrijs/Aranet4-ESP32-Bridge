@@ -64,6 +64,13 @@ enum ILog {
 #define PREF_K_WIFI_IP_GW     "wifi_ip_gw"
 #define PREF_K_WIFI_IP_DNS    "wifi_ip_dns"
 
+#define PREF_K_WG_ENABLED     "wg_enabled"
+#define PREF_K_WG_ENDPOINT    "wg_endnpint"
+#define PREF_K_WG_PORT        "wg_port"
+#define PREF_K_WG_PUB_KEY     "wg_pub_key"
+#define PREF_K_WG_PRIVATE_KEY "wg_private_key"
+#define PREF_K_WG_LOCAL_IP    "wg_local_ip"
+
 #define PREF_K_INFLUX_URL     "influx_url"
 #define PREF_K_INFLUX_ORG     "influx_org"
 #define PREF_K_INFLUX_TOKEN   "influx_token"

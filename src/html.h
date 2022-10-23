@@ -432,12 +432,14 @@ String printHtmlConfig(Preferences* prefs, bool updated = false) {
     char gateway[16];
     char dns[16];
     char mqttIpAddr[16];
+    char wgIpAddr[16];
 
     ip2str(prefs->getUInt(PREF_K_WIFI_IP_ADDR), ipAddr);
     ip2str(prefs->getUInt(PREF_K_WIFI_IP_MASK), netmask);
     ip2str(prefs->getUInt(PREF_K_WIFI_IP_GW), gateway);
     ip2str(prefs->getUInt(PREF_K_WIFI_IP_DNS), dns);
     ip2str(prefs->getUInt(PREF_K_MQTT_SERVER), mqttIpAddr);
+    ip2str(prefs->getUInt(PREF_K_WG_LOCAL_IP), wgIpAddr);
 
     if (updated) {
         page += printCard(
@@ -451,15 +453,22 @@ String printHtmlConfig(Preferences* prefs, bool updated = false) {
     page += printCard("System", printHtmlTextInput(PREF_K_SYS_NAME, "Device Name", prefs->getString(PREF_K_SYS_NAME), 32)
                                 + printHtmlTextInput(PREF_K_NTP_URL, "NTP Server", prefs->getString(PREF_K_NTP_URL), 47));
 
-    page += printCard("Connectivity", printHtmlTextInput(PREF_K_WIFI_SSID, "Wi-Fi SSID", prefs->getString(PREF_K_WIFI_SSID), 32)
-                                    + printHtmlTextInput(PREF_K_WIFI_PASSWORD, "Wi-Fi Password", prefs->getString(PREF_K_WIFI_PASSWORD), 63)
-                                    + printHtmlCheckboxInput(PREF_K_WIFI_IP_STATIC, "Set static IP address", prefs->getBool(PREF_K_WIFI_IP_STATIC))
-                                    + "<div id=\"ipcfg\">"
+    page += printCard("Wireless", printHtmlTextInput(PREF_K_WIFI_SSID, "Wi-Fi SSID", prefs->getString(PREF_K_WIFI_SSID), 32)
+                                + printHtmlTextInput(PREF_K_WIFI_PASSWORD, "Wi-Fi Password", prefs->getString(PREF_K_WIFI_PASSWORD), 63)
+                                + printHtmlCheckboxInput(PREF_K_WIFI_IP_STATIC, "Set static IP address", prefs->getBool(PREF_K_WIFI_IP_STATIC))
+                                + "<div id=\"ipcfg\">"
                                     + printHtmlTextInput(PREF_K_WIFI_IP_ADDR, "IP address", ipAddr, 15)
                                     + printHtmlTextInput(PREF_K_WIFI_IP_MASK, "Network mask", netmask, 15)
                                     + printHtmlTextInput(PREF_K_WIFI_IP_GW, "Gateway", gateway, 15)
                                     + printHtmlTextInput(PREF_K_WIFI_IP_DNS, "DNS", dns, 15)
-                                    + "</div>");
+                                + "</div>");
+
+    page += printCard("Wireguard", printHtmlCheckboxInput(PREF_K_WG_ENABLED, "Enabled", prefs->getBool(PREF_K_WG_ENABLED))
+                                + printHtmlTextInput(PREF_K_WG_ENDPOINT, "Endpoint", prefs->getString(PREF_K_WG_ENDPOINT), 64)
+                                + printHtmlNumberInput(PREF_K_WG_PORT, "Port", prefs->getUShort(PREF_K_WG_PORT), 0xFFFF)
+                                + printHtmlTextInput(PREF_K_WG_PUB_KEY, "Public key", prefs->getString(PREF_K_WG_PUB_KEY), 45)
+                                + printHtmlTextInput(PREF_K_WG_LOCAL_IP, "Local IP", wgIpAddr, 15)
+                                + printHtmlTextInput(PREF_K_WG_PRIVATE_KEY, "Private key", prefs->getString(PREF_K_WG_PRIVATE_KEY), 45));
 
     page += printCard("Influx DB", printHtmlTextInput(PREF_K_INFLUX_URL, "Url", prefs->getString(PREF_K_INFLUX_URL), 128)
                                 + printHtmlTextInput(PREF_K_INFLUX_ORG, "Organisation", prefs->getString(PREF_K_INFLUX_ORG), 16)

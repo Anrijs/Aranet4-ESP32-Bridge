@@ -60,6 +60,8 @@ void setup() {
     enableCore1WDT();
 
     setupWatchdog();
+
+    setupWireguard();
 }
 
 void loop() {

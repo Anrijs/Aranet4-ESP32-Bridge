@@ -10,6 +10,7 @@
 #include <rom/rtc.h>
 #include <vector>
 #include <ArduinoJson.h>
+#include <WireGuard-ESP32.h>
 //#include "esp_task_wdt.h"
 
 #include "vector"
@@ -67,6 +68,8 @@ long ntpSyncTime = 0;
 uint8_t ntpSyncFails = 0;
 bool spiffsOk = false;
 
+static WireGuard wg;
+
 // ---------------------------------------------------
 //                 Function declarations
 // ---------------------------------------------------
@@ -83,6 +86,8 @@ void task_sleep(uint32_t ms);
 void startNtpSyncTask();
 void log(String msg, ILog level);
 bool ntpSync();
+
+void setupWireguard();
 
 void setupWatchdog();
 void startWatchdog(uint32_t period);
@@ -453,7 +458,7 @@ bool startWebserver() {
             prefs.putString(PREF_K_NTP_URL, request->arg(PREF_K_NTP_URL));
         }
 
-        // Network
+        // Wireless
         if (request->hasArg(PREF_K_WIFI_SSID))     {
             prefs.putString(PREF_K_WIFI_SSID, request->arg(PREF_K_WIFI_SSID));
         }
@@ -474,6 +479,24 @@ bool startWebserver() {
         }
         if (request->hasArg(PREF_K_WIFI_IP_DNS)) {
             prefs.putUInt(PREF_K_WIFI_IP_DNS, str2ip(request->arg(PREF_K_WIFI_IP_DNS)));
+        }
+
+        // Wireguard
+        prefs.putBool(PREF_K_WG_ENABLED, request->hasArg(PREF_K_WG_ENABLED));
+        if (request->hasArg(PREF_K_WG_ENDPOINT))     {
+            prefs.putString(PREF_K_WG_ENDPOINT, request->arg(PREF_K_WG_ENDPOINT));
+        }
+        if (request->hasArg(PREF_K_WG_PORT))     {
+            prefs.putUShort(PREF_K_WG_PORT, request->arg(PREF_K_WG_PORT).toInt());
+        }
+        if (request->hasArg(PREF_K_WG_PUB_KEY))     {
+            prefs.putString(PREF_K_WG_PUB_KEY, request->arg(PREF_K_WG_PUB_KEY));
+        }
+        if (request->hasArg(PREF_K_WG_PRIVATE_KEY))     {
+            prefs.putString(PREF_K_WG_PRIVATE_KEY, request->arg(PREF_K_WG_PRIVATE_KEY));
+        }
+        if (request->hasArg(PREF_K_WG_LOCAL_IP)) {
+            prefs.putUInt(PREF_K_WG_LOCAL_IP, str2ip(request->arg(PREF_K_WG_LOCAL_IP)));
         }
 
         // Influx
@@ -987,6 +1010,19 @@ void printScannecDevices() {
         NimBLEAddress adr(d->addr);
         long ago = millis() - d->lastSeen;
         Serial.printf("[%s],  %lu ms\n", adr.toString().c_str(), ago);
+    }
+}
+
+void setupWireguard() {
+    if (!isAp && prefs.getBool(PREF_K_WG_ENABLED)) {
+        Serial.println("Initializing WireGuard...");
+        IPAddress local_ip(htobe32(prefs.getUInt(PREF_K_WG_LOCAL_IP)));
+        wg.begin(
+            local_ip,
+            prefs.getString(PREF_K_WG_PRIVATE_KEY).c_str(),
+            prefs.getString(PREF_K_WG_ENDPOINT).c_str(),
+            prefs.getString(PREF_K_WG_PUB_KEY).c_str(),
+            prefs.getUShort(PREF_K_WG_PORT, 13231));
     }
 }
 
