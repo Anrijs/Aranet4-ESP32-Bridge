@@ -454,6 +454,9 @@ bool startWebserver() {
         if (request->hasArg(PREF_K_SYS_NAME))     {
             prefs.putString(PREF_K_SYS_NAME, request->arg(PREF_K_SYS_NAME));
         }
+        if (request->hasArg(PREF_K_SCAN_REBOOT))     {
+            prefs.putUShort(PREF_K_SCAN_REBOOT, request->arg(PREF_K_SCAN_REBOOT).toInt());
+        }
         if (request->hasArg(PREF_K_NTP_URL))      {
             prefs.putString(PREF_K_NTP_URL, request->arg(PREF_K_NTP_URL));
         }

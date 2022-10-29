@@ -12,6 +12,7 @@
 #include "esp_task_wdt.h"
 
 long nextReport = 0;
+long failedScans = 0;
 
 int downloadHistory(Aranet4* ar4, AranetDevice* d, int newRecords);
 
@@ -209,6 +210,21 @@ void loop() {
 
         cancelWatchdog();
         influxFlushBuffer(influxClient);
+    }
+
+    if (results.getCount() > 0) {
+        failedScans = 0;
+    } else {
+        failedScans++;
+        Serial.println("Scan failed. No results.");
+        uint16_t limit = prefs.getUInt(PREF_K_SCAN_REBOOT, 0);
+        if (limit > 0 && failedScans >= limit) {
+            Serial.println("Too many scans failed. Rebooting.");
+            log("Scans failed. Rebooting.", ERROR);
+            influxFlushBuffer(influxClient);
+            task_sleep(5000);
+            ESP.restart();
+        }
     }
 
     cleanupScannedDevices();

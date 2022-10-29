@@ -451,7 +451,8 @@ String printHtmlConfig(Preferences* prefs, bool updated = false) {
     }
 
     page += printCard("System", printHtmlTextInput(PREF_K_SYS_NAME, "Device Name", prefs->getString(PREF_K_SYS_NAME), 32)
-                                + printHtmlTextInput(PREF_K_NTP_URL, "NTP Server", prefs->getString(PREF_K_NTP_URL), 47));
+                                + printHtmlTextInput(PREF_K_NTP_URL, "NTP Server", prefs->getString(PREF_K_NTP_URL), 47)
+                                + printHtmlNumberInput(PREF_K_SCAN_REBOOT, "Rebbot after [n] failed scans", prefs->getUShort(PREF_K_SCAN_REBOOT), 0xFFFF));
 
     page += printCard("Wireless", printHtmlTextInput(PREF_K_WIFI_SSID, "Wi-Fi SSID", prefs->getString(PREF_K_WIFI_SSID), 32)
                                 + printHtmlTextInput(PREF_K_WIFI_PASSWORD, "Wi-Fi Password", prefs->getString(PREF_K_WIFI_PASSWORD), 63)

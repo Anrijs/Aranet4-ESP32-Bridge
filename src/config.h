@@ -50,6 +50,8 @@ enum ILog {
 // Keystore keys
 #define PREF_K_SYS_NAME       "sys_name"
 
+#define PREF_K_SCAN_REBOOT    "scan_reboot"
+
 #define PREF_K_LOGIN_USER     "sys_user"
 #define PREF_K_LOGIN_PASSWORD "sys_password"
 
