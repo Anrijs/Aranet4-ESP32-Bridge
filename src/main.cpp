@@ -10,6 +10,7 @@
 
 #include "main.h"
 #include "esp_task_wdt.h"
+#include "MikroTikBT5.h"
 
 long nextReport = 0;
 long failedScans = 0;
@@ -52,7 +53,9 @@ void setup() {
     Aranet4::init();
     ar4.setConnectTimeout(CFG_BT_CONNECT_TIMEOUT);
 
-    pScan->setActiveScan(true);
+    pScan->setActiveScan(false);
+    pScan->setInterval(97);
+    pScan->setWindow(37);
 
     delay(500);
 
@@ -79,11 +82,6 @@ void loop() {
     Serial.println("Scanning BT devices");
     pScan->start(CFG_BT_SCAN_DURATION);
 
-    while (pScan->isScanning()) {
-        Serial.print(".");
-        task_sleep(1000);
-    }
-
     NimBLEScanResults results = pScan->getResults();
 
     Serial.printf(" Found %u devices\n", results.getCount());
@@ -100,6 +98,35 @@ void loop() {
         strManufacturerData.copy((char *)cManufacturerData, cLength, 0);
         memcpy(&manufacturerId, (void*) cManufacturerData, sizeof(manufacturerId));
 
+        if (manufacturerId == MIKROTIK_MANUFACTURER_ID) {
+            MikroTikBeacon beacon;
+            beacon.unpack(cManufacturerData, cLength);
+            if (!beacon.isValid()) return;
+            // send beacon data
+            Point point("bt5-tag");
+            point.addTag("device", prefs.getString(PREF_K_SYS_NAME));
+            point.addTag("name", adv.getAddress().toString().c_str());
+            if (beacon.hasTemperature()) {
+                point.addField("temperature", beacon.temperature);
+            }
+
+            point.addField("accel_x", beacon.acceleration.x);
+            point.addField("accel_y", beacon.acceleration.y);
+            point.addField("accel_z", beacon.acceleration.z);
+
+            point.addField("battery", beacon.battery);
+            point.addField("flags", beacon.flags);
+            point.addField("uptime", beacon.flags);
+
+            point.addField("rssi", adv.getRSSI());
+
+            if (!influxSendPoint(influxClient, point)) {
+                Serial.println(" Upload failed.");
+            }
+
+            registerScannedDevice(&adv, "TG-BT5");
+        }
+
         bool hasManufacturerData = manufacturerId == 0x0702 && cLength >= 22;
         bool hasName = adv.getName().find("Aranet") != std::string::npos;
 
@@ -107,7 +134,7 @@ void loop() {
             continue;
         }
 
-        registerScannedDevice(&adv);
+        registerScannedDevice(&adv, nullptr);
 
         // find saved aranet device
         AranetDevice* d = findSavedDevice(&adv);
@@ -191,6 +218,7 @@ void loop() {
 
             Serial.print("Uploading data... ");
             Point pt = influxCreatePoint(&prefs, d, &d->data);
+            pt.addField("rssi", adv.getRSSI());
             if (!influxSendPoint(influxClient, pt)) {
                 Serial.println(" Upload failed.");
             }
@@ -222,17 +250,17 @@ void loop() {
             Serial.println("Too many scans failed. Rebooting.");
             log("Scans failed. Rebooting.", ERROR);
             influxFlushBuffer(influxClient);
-            task_sleep(5000);
+            long to = millis() + 10000;
+            while (!influxClient->isBufferEmpty() && to < millis()) {
+                task_sleep(1000);
+            }
             ESP.restart();
         }
     }
 
     cleanupScannedDevices();
-    printScannecDevices();
-    Serial.println("Waiting for next scan");
 
     influxFlushBuffer(influxClient);
-    task_sleep(5000);
 }
 
 int downloadHistory(Aranet4* ar4, AranetDevice* d, int newRecords) {

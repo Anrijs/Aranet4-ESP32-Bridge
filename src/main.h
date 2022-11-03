@@ -958,7 +958,7 @@ AranetDevice* findSavedDevice(NimBLEAdvertisedDevice* adv) {
     return findSavedDevice(adv->getAddress());
 }
 
-void registerScannedDevice(NimBLEAdvertisedDevice* adv) {
+void registerScannedDevice(NimBLEAdvertisedDevice* adv, char* name) {
     // find existing
     NimBLEAddress umac = adv->getAddress();
     int rssi = adv->getRSSI();
@@ -985,7 +985,11 @@ void registerScannedDevice(NimBLEAdvertisedDevice* adv) {
         // make new
         if (!dev) {
             dev = new AranetDevice();
-            strcpy(dev->name, adv->getName().c_str());
+            if (name != nullptr) {
+                strcpy(dev->name, name);
+            } else {
+                strcpy(dev->name, adv->getName().c_str());
+            }
             dev->addr = umac;
             newDevices.push_back(dev);
         }
