@@ -1002,13 +1002,15 @@ void registerScannedDevice(NimBLEAdvertisedDevice* adv, char* name) {
 }
 
 void cleanupScannedDevices() {
-    newDevices.erase(
-        std::remove_if(
-            newDevices.begin(), newDevices.end(), [](const AranetDevice* d) {
-                return (millis() - d->lastSeen) > 30000; // remove 30s and older
-            }
-        ), newDevices.end()
-    );
+    for (std::vector<AranetDevice*>::iterator it=newDevices.begin(); it!=newDevices.end(); ) {
+        AranetDevice* d = *it;
+        if ((millis() - d->lastSeen) > 30000) {
+            it = newDevices.erase(it);
+            delete d;
+        } else {
+            ++it;
+        }
+    }
 }
 
 void printScannecDevices() {
