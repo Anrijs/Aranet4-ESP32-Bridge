@@ -101,7 +101,8 @@ void loop() {
         if (manufacturerId == MIKROTIK_MANUFACTURER_ID) {
             MikroTikBeacon beacon;
             beacon.unpack(cManufacturerData, cLength);
-            if (!beacon.isValid()) return;
+            if (!beacon.isValid()) continue;
+
             // send beacon data
             Point point("bt5-tag");
             point.addTag("device", prefs.getString(PREF_K_SYS_NAME));
@@ -125,6 +126,7 @@ void loop() {
             }
 
             registerScannedDevice(&adv, "TG-BT5");
+            continue;
         }
 
         bool hasManufacturerData = manufacturerId == 0x0702 && cLength >= 22;
@@ -258,6 +260,7 @@ void loop() {
         }
     }
 
+    pScan->clearResults();
     cleanupScannedDevices();
 
     influxFlushBuffer(influxClient);
