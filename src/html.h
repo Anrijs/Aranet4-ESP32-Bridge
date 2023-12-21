@@ -122,9 +122,45 @@ const char* deviceCardHtml = R"(
     </div>
 )";
 
+const char* deviceCard2Html = R"(
+    <div class="card co2-none">
+        <div class="cardtop co2-none"></div>
+        <div class="cardbody">
+            <div>
+                <img src="/img/bluetoothred.png" class="cardimg">
+                <span class="cardtitle">Unknown device</span>
+                <span style="float:right;">
+                    <img class="batt-val" src="/img/battery_10.png" title="0%">
+                </span>
+            </div>
+            <div style="display: flex;">
+                <div class="cardfl">
+                    <img src="/img/temp.png" alt="Temperature">
+                    <br>
+                    <b class="temp-val" style="font-size: 28px;">0.0</b>&deg;C
+                </div>
+                <div class="cardfl">
+                    <img src="/img/humidity.png" alt="Humidity">
+                    <br>
+                    <b class="humi-val" style="font-size: 28px;">0</b>%</div>
+                </div>
+            </div>
+        </div>
+    </div>
+)";
+
 const char* indexScript = R"(
 <script>
     let template = false;
+    let template2 = false;
+
+    function setval(card, name, value) {
+        let elems = card.getElementsByClassName(name);
+        for (i=0;i<elems.length;i++) {
+            elems[i].textContent = value;
+        }
+    }
+
     function updateCards() {
         fetch("/data")
             .then(response => response.text())
@@ -137,7 +173,7 @@ const char* indexScript = R"(
             var nextUpdate = 300;
             for (let ln of lines) {
                 let pt = ln.split(";");
-                if (pt.length < 11) {
+                if (pt.length < 12) {
                     continue;
                 }
 
@@ -146,12 +182,24 @@ const char* indexScript = R"(
 
                 if (!en.includes("e")) continue;
 
-                let card = document.createElement('div');
-                card.innerHTML = template;
-                card = card.firstChild;
+                let devname = pt[2];
+                let packing = pt[4];
+                let co2 = pt[5];
+                let temperature = pt[6];
+                let pressure = pt[7];
+                let humidity = pt[8];
+                let batt = pt[9];
+                let interval = pt[10];
+                let age = pt[11];
+                let updat = pt[12];
 
-                let co2 = pt[4];
-                let batt = pt[8];
+                let card = document.createElement('div');
+                if (packing == 1) {
+                    card.innerHTML = template;
+                } else {
+                    card.innerHTML = template2;
+                }
+                card = card.firstChild;
 
                 var klass = "co2-none";
                 if (co2 == 0) kalss="co2-none";
@@ -172,22 +220,24 @@ const char* indexScript = R"(
                 else if (batt > 10) batimg ="20";
                 else batimg = "10";
                 var btimg = "bluetooth";
-                if (pt[11] > (parseInt(pt[9])+5)) {
+                if (updat > (parseInt(interval)+5)) {
                     btimg = "bluetoothred";
                     klass = "co2-none";
                 }
-                card.getElementsByClassName("cardtitle")[0].textContent = pt[2];
+
                 card.getElementsByClassName("cardimg")[0].src = "/img/" + btimg + ".png";
                 card.getElementsByClassName("batt-val")[0].src = "/img/battery_" + batimg + ".png";
                 card.getElementsByClassName("batt-val")[0].title = batt + "%";
-                card.getElementsByClassName("co2-txt")[0].textContent = co2;
-                card.getElementsByClassName("temp-val")[0].textContent = pt[5];
-                card.getElementsByClassName("humi-val")[0].textContent = pt[7];
-                card.getElementsByClassName("pres-val")[0].textContent = pt[6];
+
+                setval(card, "cardtitle", devname);
+                setval(card, "co2-val",   co2);
+                setval(card, "temp-val",  temperature);
+                setval(card, "humi-val",  humidity);
+                setval(card, "pres-val",  pressure);
 
                 card.className="card " + klass;
 
-                let u = pt[9] - pt[11]; // 9 = interval, 10 = ago, 11 = real ago
+                let u = interval - updat;
                 if (u<nextUpdate)nextUpdate=u;
 
                 devices.appendChild(card);
@@ -199,9 +249,15 @@ const char* indexScript = R"(
     window.onload = function() {
         fetch("/devices_template")
             .then(response => response.text())
-            .then((dataStr) => {
-                template = dataStr.trim();
-                updateCards();
+            .then((dataStr1) => {
+                template = dataStr1.trim();
+                fetch("/devices_template2")
+                    .then(response => response.text())
+                    .then((dataStr2) => {
+                        template2 = dataStr2.trim();
+                        updateCards();
+                    });
+
             });
     }
 </script>
@@ -254,7 +310,8 @@ const char* devicesScript = R"(
         }
 
         function addDevice(devicemac) {
-            fetch("/devices_add", { method: "POST", headers: { "Content-Type": "application/x-www-form-urlencoded" }, body: "devicemac=" + devicemac })
+            let name = prompt("device name:");
+            fetch("/devices_add", { method: "POST", headers: { "Content-Type": "application/x-www-form-urlencoded" }, body: "devicemac=" + devicemac + "&name=" + name  })
                 .then((response) => response.text())
                 .then((dataStr) => {
                     if (dataStr != "OK") {

@@ -49,13 +49,19 @@ Point influxCreateStatusPoint(Preferences *prefs) {
 }
 
 Point influxCreatePoint(Preferences *prefs, AranetDevice* device, AranetData *data) {
-    Point point("aranet4");
+    Point point("aranet");
     point.addTag("device", prefs->getString(PREF_K_SYS_NAME));
     point.addTag("name", device->name);
-    point.addField("co2", data->co2);
-    point.addField("temperature", data->temperature / 20.0);
-    point.addField("pressure", data->pressure / 10.0);
-    point.addField("humidity", data->humidity);
+
+    if (data->packing == AR4_PACKING_ARANET2) {
+        point.addField("temperature", data->temperature / 20.0);
+        point.addField("humidity", data->humidity / 10.0);
+    } else {
+        point.addField("co2", data->co2);
+        point.addField("temperature", data->temperature / 20.0);
+        point.addField("pressure", data->pressure / 10.0);
+        point.addField("humidity", data->humidity / 1.0);
+    }
     point.addField("battery", data->battery);
     point.addField("interval", data->interval);
     point.addField("ago", data->ago);

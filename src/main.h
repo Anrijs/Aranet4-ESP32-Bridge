@@ -264,7 +264,7 @@ bool getBootWiFiMode() {
 }
 
 String printData() {
-    char buf[48];
+    char buf[64];
     String page = String("");
 
     long tnow = millis();
@@ -277,11 +277,12 @@ String printData() {
         page += String(d->name);
         page += ";" + String(d->addr.toString().c_str()) + ";";
 
-        sprintf(buf, "%i;%.1f;%.1f;%i;%i;%i;%i;%i\n",
-                d->data.co2,
-                d->data.temperature / 20.0,
-                d->data.pressure / 10.0,
-                d->data.humidity,
+        sprintf(buf, "%u;%i;%.1f;%.1f;%.1f;%i;%i;%i;%i\n",
+                d->data.packing,
+                d->data.getCO2(),
+                d->data.getTemperature(),
+                d->data.getPressure(),
+                d->data.getHumidity(),
                 d->data.battery,
                 d->data.interval,
                 d->data.ago,
@@ -649,9 +650,15 @@ bool startWebserver() {
             return;
         }
 
+        String name = "";
+        if (request->hasArg("name")) {
+            name = request->arg("name");
+        }
+
         String devicemac = request->arg("devicemac");
         NimBLEAddress addr(devicemac.c_str());
         AranetDevice* d = findScannedDevice(addr);
+        strcpy(d->name, name.c_str());
 
         if (!d) {
             request->send(200, "text/html", "unknown mac");
@@ -738,11 +745,6 @@ bool startWebserver() {
     server.on("/force", HTTP_GET, [](AsyncWebServerRequest *request) {
         if (!webAuthenticate(request)) return request->requestAuthentication();
 
-        if (!request->hasArg("mac")) {
-            request->send(200, "text/html", "no mac");
-            return;
-        }
-
         NimBLEAddress addr(request->arg("id").c_str());
 
         uint8_t mac[6];
@@ -770,6 +772,11 @@ bool startWebserver() {
     server.on("/devices_template", HTTP_GET, [](AsyncWebServerRequest *request) {
         if (!webAuthenticate(request)) return request->requestAuthentication();
         request->send(200, "text/html", deviceCardHtml);
+    });
+
+    server.on("/devices_template2", HTTP_GET, [](AsyncWebServerRequest *request) {
+        if (!webAuthenticate(request)) return request->requestAuthentication();
+        request->send(200, "text/html", deviceCard2Html);
     });
 
     // Image resources

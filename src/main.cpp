@@ -174,8 +174,8 @@ void loop() {
             Serial.print("Read from beacon data ");
             Serial.println(d->name);
 
-            uint16_t len = sizeof(AranetData);
-            memcpy(&d->data, (void*) cManufacturerData + 10, len);
+            d->data.parseFromAdvertisement(cManufacturerData);
+
             dataOk = true;
             didRead = true;
         } else if (d->gatt) { // gatt must be enabled to allow reading by cinencting
@@ -195,7 +195,7 @@ void loop() {
             }
         }
 
-        if (didRead && dataOk && d->data.co2 != 0) {
+        if (didRead && dataOk) {
             Serial.printf("  CO2: %i\n  T:  %.2f\n", d->data.co2, d->data.temperature / 20.0);
 
             // Check how many records might have been skipped
@@ -297,8 +297,19 @@ int downloadHistory(Aranet4* ar4, AranetDevice* d, int newRecords) {
         cancelWatchdog();
         startWatchdog(max((int) logCount, 30));
 
+        uint8_t params = 0;
+        uint8_t packing = -1;
+
+        if (ar4->isAranet4()) {
+            params = AR4_PARAM_FLAGS;
+            packing = AR4_PACKING_ARANET4;
+        } else if (ar4->isAranet2()) {
+            params = AR2_PARAM_FLAGS;
+            packing = AR4_PACKING_ARANET2;
+        }
+
         Serial.printf("Will read %i results from %i @ %i\n", logCount, start, NimBLEDevice::getMTU());
-        ar4->getHistory(start, logCount, logs);
+        ar4->getHistory(start, logCount, logs, params);
 
         // Sometimes aranet might disconect, before full history is received
         // Set last update time to latest received timestamp;
@@ -321,6 +332,7 @@ int downloadHistory(Aranet4* ar4, AranetDevice* d, int newRecords) {
                 Serial.print(".");
             }
 
+            adata.packing = packing;
             adata.co2 = logs[k].co2;
             adata.temperature = logs[k].temperature;
             adata.pressure = logs[k].pressure;
