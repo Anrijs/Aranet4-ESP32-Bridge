@@ -69,11 +69,36 @@ void setup() {
 }
 
 void loop() {
+    ws.cleanupClients();
     if (nextReport < millis()) {
         nextReport = millis() + 10000; // 10s
         Point pt = influxCreateStatusPoint(&prefs);
         pt.addField("wifi_uptime", millis() - wifiConnectedAt);
         influxSendPoint(influxClient, pt);
+    }
+
+    for (AranetDevice* d : ar4devices) {
+        if (d->state == STATE_BEGIN_PAIR) {
+            d->state = STATE_PAIRING;
+            ar4.disconnect();
+            ar4callbacks.providePin(-1);
+            if (ar4.connect(d->addr, false) == AR4_OK) {
+                ws.textAll("PAIR_PIN");
+                if (ar4.secureConnection() == AR4_OK) {
+                    String name = ar4.getName();
+                    ws.textAll("SUCCESS:Connected to " + name);
+                    d->state = STATE_PAIRED;
+                    devicesSave();
+                } else {
+                    ws.textAll("ERROR:Pair failed");
+                    d->state = STATE_NOT_PAIRED;
+                }
+                ar4.disconnect();
+            } else {
+                ws.textAll("ERROR:Device not found");
+                d->state = STATE_NOT_PAIRED;
+            }
+        }
     }
 
     // Scan devices, then compare with saved devices and read data.
@@ -88,6 +113,7 @@ void loop() {
 
     for (int i = 0; i < results.getCount(); i++) {
         NimBLEAdvertisedDevice adv = results.getDevice(i);
+        AranetDevice* d = findSavedDevice(&adv);
 
         std::string strManufacturerData = adv.getManufacturerData();
 
@@ -98,7 +124,9 @@ void loop() {
         strManufacturerData.copy((char *)cManufacturerData, cLength, 0);
         memcpy(&manufacturerId, (void*) cManufacturerData, sizeof(manufacturerId));
 
-        if (manufacturerId == MIKROTIK_MANUFACTURER_ID) {
+        bool isMikrotik = manufacturerId == MIKROTIK_MANUFACTURER_ID;
+
+        if (isMikrotik) {
             MikroTikBeacon beacon;
             beacon.unpack(cManufacturerData, cLength);
             if (!beacon.isValid()) continue;
@@ -137,9 +165,6 @@ void loop() {
         }
 
         registerScannedDevice(&adv, nullptr);
-
-        // find saved aranet device
-        AranetDevice* d = findSavedDevice(&adv);
 
         if (!d) {
             Serial.printf("Dont read from %s. Not saved\n",adv.getAddress().toString().c_str());
@@ -183,7 +208,7 @@ void loop() {
             Serial.print("Connecting to ");
             Serial.print(d->name);
 
-            ar4_err_t status = ar4.connect(adv.getAddress(), d->paired);
+            ar4_err_t status = ar4.connect(adv.getAddress(), d->state == STATE_PAIRED);
             didRead = true;
 
             if (status == AR4_OK) {

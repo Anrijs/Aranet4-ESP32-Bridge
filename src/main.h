@@ -38,6 +38,7 @@ char* www_password;
 Preferences prefs;
 
 AsyncWebServer server(80);
+AsyncWebSocket ws("/ws");
 
 MyAranet4Callbacks ar4callbacks;
 std::vector<AranetDevice*> ar4devices;
@@ -147,7 +148,7 @@ void devicesLoad() {
                     AranetDevice* d = new AranetDevice();
 
                     d->enabled = settings["enabled"];
-                    d->paired = settings["paired"];
+                    d->state = settings["paired"] ? STATE_PAIRED : STATE_NOT_PAIRED;
                     d->gatt = settings["gatt"];
                     d->history = settings["history"];
 
@@ -383,6 +384,75 @@ void startWebserverTask() {
         0);             /* pin task to core 0 */
 }
 
+
+// JS: var ws = new WebSocket("ws://" + location.host + "/ws");
+void onWsEvent(AsyncWebSocket * server, AsyncWebSocketClient * client, AwsEventType type, void * arg, uint8_t *data, size_t len) {
+    if(type == WS_EVT_CONNECT){
+        Serial.printf("ws[%s][%u] connect\n", server->url(), client->id());
+        client->printf("Hello Client %u :)", client->id());
+        client->ping();
+    } else if(type == WS_EVT_DISCONNECT){
+        Serial.printf("ws[%s][%u] disconnect\n", server->url(), client->id());
+    } else if(type == WS_EVT_ERROR){
+        Serial.printf("ws[%s][%u] error(%u): %s\n", server->url(), client->id(), *((uint16_t*)arg), (char*)data);
+    } else if(type == WS_EVT_PONG){
+        Serial.printf("ws[%s][%u] pong[%u]: %s\n", server->url(), client->id(), len, (len)?(char*)data:"");
+    } else if(type == WS_EVT_DATA){
+        AwsFrameInfo * info = (AwsFrameInfo*)arg;
+        bool cmdread = true;
+        String cmd = "";
+        String msg = "";
+        if(info->final && info->index == 0 && info->len == len) {
+            //the whole message is in a single frame and we got all of it's data
+            Serial.printf("ws[%s][%u] %s-message[%llu]: ", server->url(), client->id(), (info->opcode == WS_TEXT)?"text":"binary", info->len);
+
+            if(info->opcode == WS_TEXT){
+                for(size_t i=0; i < info->len; i++) {
+                    char c = data[i];
+                    if (cmdread && c == ':') {
+                        cmdread = false;
+                    } else {
+                        if (cmdread) cmd += c;
+                        else msg += c;
+                    }
+                }
+
+                Serial.print("command: [");
+                Serial.print(cmd);
+                Serial.print("], message: [");
+                Serial.print(msg);
+                Serial.println("]");
+
+                if (cmd == "PAIR_BEGIN") {
+                    // lookup device by mac
+                    NimBLEAddress addr(msg.c_str());
+                    AranetDevice* d = findSavedDevice(addr);
+                    if (d && d->state == STATE_NOT_PAIRED) {
+                        Serial.print("Pair device: ");
+                        Serial.println(d->name);
+
+                        ar4callbacks.providePin(-1); // reset pin
+                        d->state = STATE_BEGIN_PAIR;
+                    } else {
+                        client->text("ERROR:Invalid device");
+                    }
+                } else if (cmd == "PAIR_PIN") {
+                    uint32_t pin = msg.toInt();
+                    if (pin == 0) {
+                        client->text("ERROR:Bad PIN");
+                        ar4callbacks.providePin(0);
+                    } else {
+                        ar4callbacks.providePin(pin);
+                    }
+                }
+            }
+        } else {
+            // no multipart support
+        }
+    }
+}
+
+
 bool setupWifiAndWebserver(bool restart = false) {
     if (restart) {
         WiFi.disconnect();
@@ -560,88 +630,6 @@ bool startWebserver() {
         request->send(200, "text/plain", printDevices());
     });
 
-    server.on("/devices_pair", HTTP_POST, [](AsyncWebServerRequest *request) {
-        if (!webAuthenticate(request)) return request->requestAuthentication();
-
-        if (!request->hasArg("devicemac")) {
-            request->send(200, "text/html", "no mac address");
-            return;
-        }
-
-        String devicemac = request->arg("devicemac");
-        NimBLEAddress addr(devicemac.c_str());
-        AranetDevice* d = findSavedDevice(addr);
-
-        if (!d) {
-            request->send(200, "text/html", "unknown mac");
-            return;
-        }
-
-        // Abort task
-        if (pScan->isScanning()) pScan->stop();
-
-        uint32_t pin = -1;
-        if (request->hasArg("pin")) {
-            pin = request->arg("pin").toInt();
-        }
-
-        Serial.println("Begin pair");
-
-        if (d->paired) {
-            request->send(200, "text/html", "Already paired.");
-        } else {
-            if (pin != -1) {
-                Serial.println("recvd PIN");
-                String result = "Failed";
-                ar4callbacks.providePin(pin);
-
-                String ar4name = ar4.getName();
-                if (ar4name.length() > 1) {
-                    result = "Connected to " + ar4name;
-                    d->paired = true;
-                    devicesSave();
-                } else {
-                    result = "Failed to get name";
-                    ar4name = ar4.getName();
-                    Serial.println(ar4name);
-                    ar4name = ar4.getSwVersion();
-                    Serial.println(ar4name);
-                    ar4name = ar4.getFwVersion();
-                    Serial.println(ar4name);
-                    ar4name = ar4.getHwVersion();
-                    Serial.println(ar4name);
-                    AranetData meas = ar4.getCurrentReadings();
-                    Serial.printf("MEAS:\n  %i ppm\n", meas.co2);
-                }
-
-                ar4.disconnect();
-                Serial.println(result);
-                request->send(200, "text/html", result);
-            } else {
-                Serial.printf("Connecting to device: %s\n", addr.toString().c_str());
-                ar4callbacks.providePin(-1); // reset pin
-
-                NimBLEAdvertisedDevice* adv = nullptr;
-                NimBLEScanResults results = pScan->getResults();
-                for (uint32_t i = 0; i < results.getCount(); i++) {
-                    NimBLEAdvertisedDevice ax = results.getDevice(i);
-                    if ((uint64_t) ax.getAddress() == (uint64_t) addr) {
-                        adv = &ax;
-                        break;
-                    }
-                }
-
-                if (adv && ar4.connect(adv, false) == AR4_OK) {
-                    request->send(200, "text/html", "OK");
-                    ar4.secureConnection();
-                } else {
-                    request->send(200, "text/html", "Connection failed");
-                }
-            }
-        }
-
-    });
-
     server.on("/devices_add", HTTP_POST, [](AsyncWebServerRequest *request) {
         if (!webAuthenticate(request)) return request->requestAuthentication();
 
@@ -791,6 +779,8 @@ bool startWebserver() {
       request->send(404, "text/html", "404");
     });
 
+    ws.onEvent(onWsEvent);
+    server.addHandler(&ws);
     server.begin();
 
     return true;

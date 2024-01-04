@@ -194,7 +194,7 @@ const char* indexScript = R"(
                 let updat = pt[12];
 
                 let card = document.createElement('div');
-                if (packing == 1) {
+                if (packing == 1 || packing == 255) {
                     card.innerHTML = template;
                 } else {
                     card.innerHTML = template2;
@@ -265,6 +265,46 @@ const char* indexScript = R"(
 </script>
 )";
 
+const char* wsScript = R"(
+<script>
+    const socket = new WebSocket("ws://" + location.host + "/ws");
+    socket.onopen = function(e) {
+        console.log("[open] Socket opened");
+        socket.send("OPENED");
+    };
+
+    socket.onmessage = function(event) {
+        if (event.data == "PAIR_PIN") {
+            let pin = prompt("Enter PIN");
+            if (pin > 0) {
+                socket.send(`PAIR_PIN:${pin}`);v
+            } else {
+                socket.send(`PAIR_PIN:0`);
+            }
+        } else if (event.data.startsWith("ERROR:")) {
+            let err = event.data.replace("ERROR:","");
+            alert(err);
+        } else if (event.data.startsWith("SUCCESS:")) {
+            let err = event.data.replace("SUCCESS:","");
+            alert(err);
+        }
+        console.log(`[message] Data received from server: ${event.data}`);
+    };
+
+    socket.onclose = function(event) {
+        if (event.wasClean) {
+            console.log(`[close] Connection closed cleanly, code=${event.code} reason=${event.reason}`);
+        } else {
+            console.log('[close] Connection died');
+        }
+    };
+
+    socket.onerror = function(error) {
+        console.log(`[error]` + error);
+    };
+</script>
+)";
+
 const char* devicesScript = R"(
     <script>
         var failed = 0;
@@ -293,10 +333,12 @@ const char* devicesScript = R"(
 
 
             let utils = "";
-            if (!parts[5].includes("p")) {
-                utils += '<button onclick="pairDevice(`' + parts[1] + '`);">Pair device</button><br>';
-            } else {
+            if (parts[5].includes("P")) {
+                utils += '<button disabled>Pairing...</button><br>';
+            } else if (parts[5].includes("p")) {
                 utils += `<label><input type="checkbox" checked disabled> Paired </label><br>`;
+            } else {
+                utils += '<button onclick="pairDevice(`' + parts[1] + '`, this);">Pair device</button><br>';
             }
 
             let chk = parts[5].includes("e") ? "checked" : "";
@@ -385,24 +427,12 @@ const char* devicesScript = R"(
                 });
         }
 
-        function pairDevice(devicemac) {
-            fetch("/devices_pair", { method: "POST", headers: { "Content-Type": "application/x-www-form-urlencoded" }, body: "devicemac=" + devicemac })
-                .then((response) => response.text())
-                .then((dataStr) => {
-                    if (dataStr != "OK") {
-                        alert(dataStr);
-                        return;
-                    }
-                    let pin = prompt("Enter PIN");
-                    if (pin > 0) {
-                        fetch("/devices_pair", { method: "POST", headers: { "Content-Type": "application/x-www-form-urlencoded" }, body: "devicemac=" + devicemac + "&pin=" + pin })
-                            .then((response) => response.text())
-                            .then((dataStr) => {
-                                alert(dataStr);
-                                fetchResults();
-                            });
-                    }
-                });
+        function pairDevice(devicemac, btn = undefined) {
+            if (btn) {
+                btn.disabled = true;
+                btn.innerText = "Pairing...";
+            }
+            socket.send("PAIR_BEGIN:" + devicemac);
         }
 
         let refreshTimeout = setTimeout(fetchResults, 100);
@@ -577,6 +607,7 @@ String printDevicesPage() {
         "Discovered devices",
         newDevicesHtml
     );
+    page += String(wsScript);
     page += String(devicesScript);
     page += String(htmlFooter);
 

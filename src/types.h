@@ -10,12 +10,19 @@ enum DeviceType {
     ARANET4 = 1
 };
 
+enum PairState {
+    STATE_NOT_PAIRED,
+    STATE_BEGIN_PAIR,
+    STATE_PAIRING,
+    STATE_PAIRED
+};
+
 typedef struct AranetDevice { 
     NimBLEAddress addr;
     char name[24];
 
     // pair status
-    bool paired;
+    PairState state = STATE_NOT_PAIRED;
 
     // toggles
     bool enabled;
@@ -46,7 +53,7 @@ typedef struct AranetDevice {
         device["name"] = name;
 
         JsonObject settings = device.createNestedObject("settings");
-        settings["paired"] = paired;
+        settings["paired"] = state == STATE_PAIRED;
         settings["enabled"] = enabled;
         settings["gatt"] = gatt;
         settings["history"] = history;
@@ -68,7 +75,8 @@ typedef struct AranetDevice {
 
         // flags
         if (enabled) page += 'e';
-        if (paired)  page += 'p';
+        if (state == STATE_PAIRED) page += 'p';
+        if (state == STATE_BEGIN_PAIR || state == STATE_PAIRING) page += 'P';
         if (history) page += 'h';
         if (gatt)    page += 'g';
 
