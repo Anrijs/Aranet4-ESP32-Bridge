@@ -162,7 +162,7 @@ void loop() {
             registerScannedDevice(&adv, "Airvalent");
 
             if (d && d->enabled && d->state == STATE_PAIRED && d->gatt) {
-                long expectedUpdateAt = d->updated + 150000; // 2.5min for now
+                long expectedUpdateAt = d->updated + ((d->data.interval) * 1000);
                 bool readCurrent = !(millis() < expectedUpdateAt && d->updated > 0);
 
                 if (!readCurrent) continue;
@@ -188,6 +188,8 @@ void loop() {
                 d->data.temperature = data.temperature;
                 d->data.humidity = data.humidity;
                 d->data.pressure = data.pressure;
+                d->data.interval = airv.getInterval();
+                d->data.battery = airv.getBattery() & 0x7F;
 
                 if (data.co2 > 0 && data.co2 < 0xFFFF) {
                     d->updated = millis();

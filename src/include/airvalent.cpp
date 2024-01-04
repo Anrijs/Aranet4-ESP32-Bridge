@@ -173,6 +173,13 @@ uint16_t Airvalent::getInterval() {
 }
 
 /**
+ * @brief Airvalent battery status
+ */
+uint16_t Airvalent::getBattery() {
+    return getU16Value(getAirvalentService(), UUID_Airvalent_Battery);
+}
+
+/**
  * @brief Status code of last action
  */
 airv_err_t Airvalent::getStatus() {

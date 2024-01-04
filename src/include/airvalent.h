@@ -18,12 +18,13 @@ static NimBLEUUID UUID_Airvalent("b81c94a4-6b2b-4d41-9357-0c8229ea02df");
 
 // chars
 static NimBLEUUID UUID_Airvalent_CurrentReadings("e8694d30-a155-4fb4-befa-548e64c88965");
-static NimBLEUUID UUID_Airvalent_Battery        ("e8694d30-a155-4fb4-befa-548e64c88965");
+static NimBLEUUID UUID_Airvalent_Battery        ("4baee551-e271-4c74-af17-1cdde92cde1d");
 static NimBLEUUID UUID_Airvalent_Interval       ("b1c48eea-4f5c-44f7-9797-73e0ce294881");
 
-// b'\x02\x15\xe2\xc5m\xb5\xdf\xfbH\xd2\xb0`\xd0\xf5\xa7\x10\x96\xe0\x88\xab\x04\x01\xdf'
-// b'\x02\x15\xe2\xc5m\xb5\xdf\xfbH\xd2\xb0`\xd0\xf5\xa7\x10\x96\xe0\x88\xab\x04\x01\xdf'
-// b'\x02\x15\xe2\xc5m\xb5\xdf\xfbH\xd2\xb0`\xd0\xf5\xa7\x10\x96\xe0\x88\xab\x04\x01\xdf'
+static NimBLEUUID UUID_Airvalent_LogData        ("426d4fa2-50ea-4a8d-b88c-c58b3e78f857");
+static NimBLEUUID UUID_Airvalent_TransferTotal  ("3542afbe-faa4-40c4-8804-3c6289260f3e");
+static NimBLEUUID UUID_Airvalent_TransferPointer("cdbde84d-2dc6-46e4-8d6b-f3ababf560aa");
+static NimBLEUUID UUID_Airvalent_TransferCount  ("a6cf90e4-7ec0-46b2-a90a-5c2580f85a43");
 
 typedef uint16_t airv_err_t;
 
@@ -73,6 +74,7 @@ public:
     //uint16_t      getSecondsSinceUpdate();
     //uint16_t      getTotalReadings();
     uint16_t      getInterval();
+    uint16_t      getBattery();
     //String        getName();
     //String        getSwVersion();
     //String        getFwVersion();
