@@ -48,6 +48,18 @@ Point influxCreateStatusPoint(Preferences *prefs) {
     return point;
 }
 
+Point influxCreateAirvalentPoint(Preferences *prefs, AranetDevice* device, AranetData *data) {
+    Point point("airvalent");
+    point.addTag("device", prefs->getString(PREF_K_SYS_NAME));
+    point.addTag("name", device->name);   
+    point.addField("co2", data->co2);
+    point.addField("temperature", data->temperature / 10.0);
+    point.addField("pressure", data->pressure);
+    point.addField("humidity", data->humidity / 10.0);
+
+    return point;
+}
+
 Point influxCreatePoint(Preferences *prefs, AranetDevice* device, AranetData *data) {
     Point point("aranet");
     point.addTag("device", prefs->getString(PREF_K_SYS_NAME));

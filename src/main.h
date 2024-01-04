@@ -20,6 +20,7 @@
 #include "bt.h"
 #include "html.h"
 #include "Aranet4.h"
+#include "include/airvalent.h"
 
 #include "influx/influx.h"
 #include "mqtt/mqtt.h"
@@ -45,6 +46,7 @@ std::vector<AranetDevice*> ar4devices;
 std::vector<AranetDevice*> newDevices;
 
 Aranet4 ar4(&ar4callbacks);
+Airvalent airv(&ar4callbacks);
 InfluxDBClient* influxClient = nullptr;
 
 WiFiClient espClient;

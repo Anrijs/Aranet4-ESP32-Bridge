@@ -125,6 +125,7 @@ void loop() {
         memcpy(&manufacturerId, (void*) cManufacturerData, sizeof(manufacturerId));
 
         bool isMikrotik = manufacturerId == MIKROTIK_MANUFACTURER_ID;
+        bool isAirvalent = adv.isAdvertisingService(UUID_Airvalent);
 
         if (isMikrotik) {
             MikroTikBeacon beacon;
@@ -154,6 +155,59 @@ void loop() {
             }
 
             registerScannedDevice(&adv, "TG-BT5");
+            continue;
+        }
+
+        if (isAirvalent) {
+            registerScannedDevice(&adv, "Airvalent");
+
+            if (d && d->enabled && d->state == STATE_PAIRED && d->gatt) {
+                long expectedUpdateAt = d->updated + 150000; // 2.5min for now
+                bool readCurrent = !(millis() < expectedUpdateAt && d->updated > 0);
+
+                if (!readCurrent) continue;
+
+                Serial.println("[Airvalent] Connecting");
+                startWatchdog(30);
+
+                // disconenct from old
+                long disconnectTimeout = millis() + 1000;
+                while (ar4.isConnected() && disconnectTimeout > millis()) task_sleep(10);
+
+                if(airv.connect(&adv) != AIRV_OK) {
+                    Serial.println("[Airvalent] Failed.");
+                    airv.disconnect();
+                    continue;
+                }
+
+                Serial.println("[Airvalent] Connected!");
+                AirvalentData data = airv.getCurrentReadings();
+
+                d->data.packing = AR4_PACKING_AIRVALENT;
+                d->data.co2 = data.co2;
+                d->data.temperature = data.temperature;
+                d->data.humidity = data.humidity;
+                d->data.pressure = data.pressure;
+
+                if (data.co2 > 0 && data.co2 < 0xFFFF) {
+                    d->updated = millis();
+
+                    Serial.print("Uploading data... ");
+                    Point pt = influxCreateAirvalentPoint(&prefs, d, &d->data);
+                    pt.addField("rssi", adv.getRSSI());
+                    if (!influxSendPoint(influxClient, pt)) {
+                        Serial.println(" Upload failed.");
+                    }
+                    if (!d->mqttReported) {
+                        mqttSendConfig(&mqttClient, &prefs, d);
+                        d->mqttReported = true;
+                    }
+                    mqttSendPoint(&mqttClient, &prefs, d, &d->data);
+                }
+
+                airv.disconnect();
+                cancelWatchdog();
+            }
             continue;
         }
 
