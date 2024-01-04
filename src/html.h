@@ -242,7 +242,9 @@ const char* indexScript = R"(
 
                 devices.appendChild(card);
             }
-            setTimeout(updateCards, (nextUpdate+10)*1000);
+            let interval = (nextUpdate)*1000;
+            if (interval < 10000) interval = 10000;
+            setTimeout(updateCards, interval);
             });
     }
 
