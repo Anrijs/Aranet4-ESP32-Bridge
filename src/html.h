@@ -277,7 +277,7 @@ const char* wsScript = R"(
         if (event.data == "PAIR_PIN") {
             let pin = prompt("Enter PIN");
             if (pin > 0) {
-                socket.send(`PAIR_PIN:${pin}`);v
+                socket.send(`PAIR_PIN:${pin}`);
             } else {
                 socket.send(`PAIR_PIN:0`);
             }
@@ -427,12 +427,14 @@ const char* devicesScript = R"(
                 });
         }
 
-        function pairDevice(devicemac, btn = undefined) {
+        function pairDevice(devicemac, btn = undefined, force = false) {
             if (btn) {
                 btn.disabled = true;
                 btn.innerText = "Pairing...";
             }
-            socket.send("PAIR_BEGIN:" + devicemac);
+            let cmd = "PAIR_BEGIN";
+            if (force) cmd += "_FORCE";
+            socket.send(cmd + ":" + devicemac);
         }
 
         let refreshTimeout = setTimeout(fetchResults, 100);

@@ -8,8 +8,16 @@
 
 class MyAranet4Callbacks: public Aranet4Callbacks {
     uint32_t pin = -1;
+    bool enPairing = true;
+    bool pairDenied = false;
 
     uint32_t onPinRequested() {
+        if (!enPairing) {
+            Serial.println("PIN Requested, but pairing is disabled.");
+            pairDenied = true;
+            return 123456;
+        }
+
         Serial.println("PIN Requested. Waiting for web or timeout");
         long timeout = millis() + 30000;
         while (pin == -1 && timeout > millis())
@@ -28,6 +36,20 @@ public:
         }
 
         return false;
+    }
+
+    void disablePairing() {
+        enPairing = false;
+    }
+
+    void enablePairing() {
+        enPairing = true;
+    }
+
+    bool pairWasdenied() {
+        bool tmp = pairDenied;
+        pairDenied = false;
+        return tmp;
     }
 };
 

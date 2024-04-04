@@ -13,7 +13,6 @@
 #include "MikroTikBT5.h"
 
 long nextReport = 0;
-long failedScans = 0;
 
 int downloadHistory(Aranet4* ar4, AranetDevice* d, int newRecords);
 
@@ -77,6 +76,9 @@ void loop() {
         influxSendPoint(influxClient, pt);
     }
 
+
+    // We don't want to do unexpected pairing here...
+    ar4callbacks.enablePairing();
     for (AranetDevice* d : ar4devices) {
         if (d->state == STATE_BEGIN_PAIR) {
             d->state = STATE_PAIRING;
@@ -105,12 +107,14 @@ void loop() {
     // do scan and read
 
     Serial.println("Scanning BT devices");
+    long procStart = millis();
     pScan->start(CFG_BT_SCAN_DURATION);
 
     NimBLEScanResults results = pScan->getResults();
 
     Serial.printf(" Found %u devices\n", results.getCount());
 
+    ar4callbacks.disablePairing();
     for (int i = 0; i < results.getCount(); i++) {
         NimBLEAdvertisedDevice adv = results.getDevice(i);
         AranetDevice* d = findSavedDevice(&adv);
@@ -126,6 +130,10 @@ void loop() {
 
         bool isMikrotik = manufacturerId == MIKROTIK_MANUFACTURER_ID;
         bool isAirvalent = adv.isAdvertisingService(UUID_Airvalent);
+        bool isAranet = adv.isAdvertisingService(UUID_Aranet4);
+
+        bool hasManufacturerData = manufacturerId == 0x0702 && cLength >= 22;
+        bool hasName = adv.getName().find("Aranet") != std::string::npos;
 
         if (isMikrotik) {
             MikroTikBeacon beacon;
@@ -175,6 +183,11 @@ void loop() {
                 while (ar4.isConnected() && disconnectTimeout > millis()) task_sleep(10);
 
                 if(airv.connect(&adv) != AIRV_OK) {
+                    if (ar4callbacks.pairWasdenied()) {
+                        // clear paired flag.
+                        d->state = STATE_NOT_PAIRED;
+                        Serial.printf("[Airvalent] clear paired flag\n");
+                    }
                     Serial.println("[Airvalent] Failed.");
                     airv.disconnect();
                     continue;
@@ -191,10 +204,10 @@ void loop() {
                 d->data.interval = airv.getInterval();
                 d->data.battery = airv.getBattery() & 0x7F;
 
-                if (data.co2 > 0 && data.co2 < 0xFFFF) {
+                if (data.co2 > 0 && data.co2 < 0xFFFF && data.temperature < 1000) {
                     d->updated = millis();
 
-                    Serial.print("Uploading data... ");
+                    Serial.println("Uploading data... ");
                     Point pt = influxCreateAirvalentPoint(&prefs, d, &d->data);
                     pt.addField("rssi", adv.getRSSI());
                     if (!influxSendPoint(influxClient, pt)) {
@@ -213,14 +226,14 @@ void loop() {
             continue;
         }
 
-        bool hasManufacturerData = manufacturerId == 0x0702 && cLength >= 22;
-        bool hasName = adv.getName().find("Aranet") != std::string::npos;
-
         if (!hasName && !hasManufacturerData) {
             continue;
         }
 
-        registerScannedDevice(&adv, nullptr);
+        if (hasName)
+            registerScannedDevice(&adv, nullptr);
+        else
+            registerScannedDevice(&adv, "Aranet");
 
         if (!d) {
             Serial.printf("Dont read from %s. Not saved\n",adv.getAddress().toString().c_str());
@@ -252,7 +265,7 @@ void loop() {
 
         if (hasManufacturerData) {
             // read from beacon
-            Serial.print("Read from beacon data ");
+            Serial.print("[Aranet4] Read from beacon data ");
             Serial.println(d->name);
 
             d->data.parseFromAdvertisement(cManufacturerData);
@@ -261,7 +274,7 @@ void loop() {
             didRead = true;
         } else if (d->gatt) { // gatt must be enabled to allow reading by cinencting
             // read from gatt
-            Serial.print("Connecting to ");
+            Serial.print("[Aranet4] Connecting to ");
             Serial.print(d->name);
 
             ar4_err_t status = ar4.connect(adv.getAddress(), d->state == STATE_PAIRED);
@@ -271,7 +284,13 @@ void loop() {
                 d->data = ar4.getCurrentReadings();
                 dataOk = ar4.getStatus() == AR4_OK;
             } else {
-                Serial.printf("Aranet4 connect failed: (%i)\n", status);
+                // Try insecure
+                if (ar4callbacks.pairWasdenied()) {
+                    // clear paired flag.
+                    d->state = STATE_NOT_PAIRED;
+                    Serial.printf("[Aranet4] clear paired flag\n");
+                }
+                Serial.printf("[Aranet4] connect failed: (%i)\n", status);
                 break;
             }
         }
@@ -322,23 +341,17 @@ void loop() {
         cancelWatchdog();
         influxFlushBuffer(influxClient);
     }
+    ar4callbacks.enablePairing();
 
-    if (results.getCount() > 0) {
-        failedScans = 0;
-    } else {
-        failedScans++;
-        Serial.println("Scan failed. No results.");
-        uint16_t limit = prefs.getUInt(PREF_K_SCAN_REBOOT, 0);
-        if (limit > 0 && failedScans >= limit) {
-            Serial.println("Too many scans failed. Rebooting.");
-            log("Scans failed. Rebooting.", ERROR);
-            influxFlushBuffer(influxClient);
-            long to = millis() + 10000;
-            while (!influxClient->isBufferEmpty() && to < millis()) {
-                task_sleep(1000);
-            }
-            ESP.restart();
+    if ((millis() - procStart) < (CFG_BT_SCAN_DURATION * 900)) {
+        Serial.println("Scan failed.");
+        log("Scan failed. Rebooting.", ERROR);
+        influxFlushBuffer(influxClient);
+        long to = millis() + 10000;
+        while (!influxClient->isBufferEmpty() && to < millis()) {
+            task_sleep(1000);
         }
+        ESP.restart();
     }
 
     pScan->clearResults();

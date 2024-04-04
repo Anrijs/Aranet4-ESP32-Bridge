@@ -425,11 +425,12 @@ void onWsEvent(AsyncWebSocket * server, AsyncWebSocketClient * client, AwsEventT
                 Serial.print(msg);
                 Serial.println("]");
 
-                if (cmd == "PAIR_BEGIN") {
+                if (cmd == "PAIR_BEGIN" || cmd == "PAIR_BEGIN_FORCE") {
+                    bool forcePair = cmd == "PAIR_BEGIN_FORCE";
                     // lookup device by mac
                     NimBLEAddress addr(msg.c_str());
                     AranetDevice* d = findSavedDevice(addr);
-                    if (d && d->state == STATE_NOT_PAIRED) {
+                    if (d && (forcePair || d->state == STATE_NOT_PAIRED)) {
                         Serial.print("Pair device: ");
                         Serial.println(d->name);
 
@@ -445,6 +446,21 @@ void onWsEvent(AsyncWebSocket * server, AsyncWebSocketClient * client, AwsEventT
                         ar4callbacks.providePin(0);
                     } else {
                         ar4callbacks.providePin(pin);
+                    }
+                } else if (cmd == "UNPAIR") {
+                    NimBLEAddress addr(msg.c_str());
+                    AranetDevice* d = findSavedDevice(addr);
+
+                    if (d) {
+                        Serial.println("[UNPAIR] Do unpair");
+                        NimBLEDevice::deleteBond(d->addr);
+                        Serial.println("[UNPAIR] Done unpair");
+                        d->state = STATE_NOT_PAIRED;
+                        // save state
+                        devicesSave();
+                        client->text("ERROR:Unpaired.");
+                    } else {
+                        client->text("ERROR:Device not found.");
                     }
                 }
             }
@@ -735,12 +751,9 @@ bool startWebserver() {
     server.on("/force", HTTP_GET, [](AsyncWebServerRequest *request) {
         if (!webAuthenticate(request)) return request->requestAuthentication();
 
-        NimBLEAddress addr(request->arg("id").c_str());
-
-        uint8_t mac[6];
-        memcpy(mac, addr.getNative(), 6);
-
-        AranetDevice* d = findSavedDevice(mac);
+        String devicemac = request->arg("devicemac");
+        NimBLEAddress addr(devicemac.c_str());
+        AranetDevice* d = findSavedDevice(addr);
 
         if (!d) {
             request->send(200, "text/html", "invalid mac");
@@ -752,8 +765,21 @@ bool startWebserver() {
             count = request->arg("count").toInt();
         }
 
-        char buf[40];
+        char buf[60];
         sprintf(buf, "Will download %u records...", count);
+
+        if (request->hasArg("hrs")) {
+            int hours = request->arg("hrs").toInt();
+            int minutes = hours * 60;
+            int interval = d->data.interval;
+            if (interval < 1) {
+                request->send(200, "text/html", "Unknown interval. Can't download.");
+                return;
+            } else {
+                sprintf(buf, "Will download %u records (%u hours)...", count, minutes);
+            }
+        }
+
         request->send(200, "text/html", buf);
 
         d->pending = count;
@@ -1003,7 +1029,7 @@ void registerScannedDevice(NimBLEAdvertisedDevice* adv, char* name) {
 void cleanupScannedDevices() {
     for (std::vector<AranetDevice*>::iterator it=newDevices.begin(); it!=newDevices.end(); ) {
         AranetDevice* d = *it;
-        if ((millis() - d->lastSeen) > 30000) {
+        if ((millis() - d->lastSeen) > (5 * 60 * 1000)) {
             it = newDevices.erase(it);
             delete d;
         } else {
