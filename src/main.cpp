@@ -76,6 +76,23 @@ bool processAranet(AranetDevice* d, NimBLEAdvertisedDevice* adv, uint8_t* cManuf
     bool readCurrent = !(millis() < expectedUpdateAt && d->updated > 0);
     bool readHistory = d->history && d->pending > 0;
 
+    if (d->history && d->pending) {
+        long mStart = millis();
+        int newRecords = d->pending;
+        if (newRecords == 0) newRecords = (((mStart - d->updated) / 1000) / d->data.interval) - 1;
+
+        if (d->updated != 0 && newRecords > 0) {
+            Serial.printf("I see missed %i records\n", newRecords);
+
+            int result = downloadHistory(&ar4, d, newRecords);
+            if (result >= 0) {
+                Serial.printf("Dwonlaoded %d logs\n", result);
+            } else {
+                Serial.println("Couldn't read history");
+            }
+        }
+    }
+
     if (!readCurrent) return false;
 
     if (hasManufacturerData) {
@@ -123,23 +140,6 @@ bool processAranet(AranetDevice* d, NimBLEAdvertisedDevice* adv, uint8_t* cManuf
 
     if (dataOk) {
         // Check how many records might have been skipped
-        if (d->history) {
-            long mStart = millis();
-            int newRecords = d->pending;
-            if (newRecords == 0) newRecords = (((mStart - d->updated) / 1000) / d->data.interval) - 1;
-
-            if (d->updated != 0 && newRecords > 0) {
-                Serial.printf("I see missed %i records\n", newRecords);
-
-                int result = downloadHistory(&ar4, d, newRecords);
-                if (result >= 0) {
-                    Serial.printf("Dwonlaoded %d logs\n", result);
-                } else {
-                    Serial.println("Couldn't read history");
-                }
-            }
-        }
-
         d->updated = millis();
 
         Point pt = influxCreatePoint(&prefs, d, &d->data);
@@ -285,7 +285,7 @@ bool processAdvertisement(NimBLEAdvertisedDevice* adv, AranetDevice* d) {
         } else {
             registerScannedDevice(adv, "Airvalent");
         }
-       prcessed =  processAirvalent(d, adv, cManufacturerData, cLength);
+        prcessed =  processAirvalent(d, adv, cManufacturerData, cLength);
     }
 
     if (isAranet) {
