@@ -52,7 +52,7 @@ void setup() {
     Aranet4::init();
     ar4.setConnectTimeout(CFG_BT_CONNECT_TIMEOUT);
 
-    pScan->setActiveScan(true);
+    pScan->setActiveScan(false); // active mode may cause `scan_evt timeout`
     pScan->setInterval(97);
     pScan->setWindow(37);
 
