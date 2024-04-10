@@ -135,7 +135,7 @@ void loop() {
         bool isAranet = adv.isAdvertisingService(UUID_Aranet4);
 
         bool hasManufacturerData = manufacturerId == 0x0702 && cLength >= 22;
-        bool hasName = adv.getName().find("Aranet") != std::string::npos;
+        bool hasName = !adv.getName().empty();
 
         if (isMikrotik) {
             MikroTikBeacon beacon;
@@ -259,19 +259,7 @@ void loop() {
         bool readCurrent = !(millis() < expectedUpdateAt && d->updated > 0);
         bool readHistory = d->history && d->pending > 0;
 
-        if(!readCurrent && !readHistory) {
-            Serial.println("No new data");
-            break; // no new measurements
-        }
-
-        startWatchdog(30);
-
-        // disconenct from old
-        long disconnectTimeout = millis() + 1000;
-        while (ar4.isConnected() && disconnectTimeout > millis()) task_sleep(10);
-
         bool dataOk = false;
-        bool didRead = false;
 
         if (hasManufacturerData) {
             // read from beacon
@@ -286,14 +274,20 @@ void loop() {
             }
 
             dataOk = d->data.parseFromAdvertisement(cManufacturerData + 2, d->data.type);
-            didRead = true;
-        } else if (d->gatt) { // gatt must be enabled to allow reading by cinencting
+        }
+
+        if (readCurrent && !dataOk && d->gatt) { // gatt must be enabled to allow reading by cinencting
+            startWatchdog(30);
+
+            // disconenct from old
+            long disconnectTimeout = millis() + 1000;
+            while (ar4.isConnected() && disconnectTimeout > millis()) task_sleep(10);
+
             // read from gatt
             Serial.print("[Aranet4] Connecting to ");
             Serial.print(d->name);
 
             ar4_err_t status = ar4.connect(adv.getAddress(), d->state == STATE_PAIRED);
-            didRead = true;
 
             if (status == AR4_OK) {
                 d->data = ar4.getCurrentReadings();
@@ -306,11 +300,11 @@ void loop() {
                     Serial.printf("[Aranet4] clear paired flag\n");
                 }
                 Serial.printf("[Aranet4] connect failed: (%i)\n", status);
-                break;
             }
+            cancelWatchdog();
         }
 
-        if (didRead && dataOk) {
+        if (dataOk) {
             // Check how many records might have been skipped
             if (d->history) {
                 long mStart = millis();

@@ -1025,6 +1025,7 @@ void registerScannedDevice(NimBLEAdvertisedDevice* adv, char* name) {
             NimBLEAddress dmac = NimBLEAddress(d->addr);
             if (d->equals(umac)) {
                 dev = d;
+                if (name == nullptr) strcpy(dev->name, adv->getName().c_str());
                 break;
             }
         }
