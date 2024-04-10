@@ -275,7 +275,7 @@ const char* indexScript = R"(
                 else if (batt > 10) batimg ="20";
                 else batimg = "10";
                 var btimg = "bluetooth";
-                if (updat > (parseInt(interval)+5)) {
+                if (updat > (parseInt(interval)*2)) {
                     btimg = "bluetoothred";
                     klass = "co2-none";
                 }
