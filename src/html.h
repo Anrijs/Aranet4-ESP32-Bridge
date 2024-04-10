@@ -160,13 +160,14 @@ const char* deviceCard3Html = R"(
                     <img class="batt-val" src="/img/battery_10.png" title="0%">
                 </span>
             </div>
+            <div class="co2">
+                <img style="margin-right: 16px; height:32px;" src="/img/radiation.png" alt="Radiation">
+                <b class="radrate-val co2-txt">0</b>
+                <span class="co2-txt">&#181;Sv/h</span>
+            </div>
             <div style="display: flex;">
                 <div class="cardfl">
-                    <img src="/img/radiation.png" alt="Radiation">
-                    <br>
-                    <b class="radrate-val" style="font-size: 28px;">0</b>uSv/h<br>
-                    <span class="radduration-val">0m </span>
-                    <b class="radtotal-val" style="font-size: 20px;">0</b>mSv
+                    <b class="radtotal-val" style="font-size: 20px;">0</b>mSv / <span class="radduration-val">0m </span>
                 </div>
             </div>
         </div>
@@ -195,6 +196,11 @@ const char* indexScript = R"(
         if (h > 0) str = h + "h " + str
         if (d > 0) str = d + "d " + str
         return str;
+    }
+
+    function naiveRound(num, decimalPlaces = 0) {
+        var p = Math.pow(10, decimalPlaces);
+        return Math.round(num * p) / p;
     }
 
     function updateCards() {
@@ -285,7 +291,7 @@ const char* indexScript = R"(
                 setval(card, "pres-val",  pressure);
 
                 setval(card, "radrate-val", rad_rate / 1000.0);
-                setval(card, "radtotal-val", rad_total / 1000000.0);
+                setval(card, "radtotal-val", naiveRound(rad_total / 1000000.0, 4));
                 setval(card, "radduration-val",  seconds2duration(rad_duration));
 
                 card.className="card " + klass;
