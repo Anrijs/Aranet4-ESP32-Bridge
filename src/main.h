@@ -141,10 +141,12 @@ void devicesLoad() {
 
             if (doc.containsKey("devices")) {
                 JsonArray devices = doc["devices"];
+                uint8_t devid = 0;
                 for (JsonObject dev : devices) {
+                    devid++;
                     if (dev.isNull()) continue;
 
-                    Serial.printf("Load device %u\n", index);
+                    Serial.printf("Load device %u\n", devid);
                     JsonObject settings = dev["settings"];
 
                     AranetDevice* d = new AranetDevice();
@@ -157,7 +159,7 @@ void devicesLoad() {
                     const char* name = dev["name"];
                     const char* mac = dev["mac"];
 
-                    d->addr = NimBLEAddress(mac);
+                    d->addr = NimBLEAddress(mac, BLE_ADDR_RANDOM);
                     strcpy(d->name, name);
 
                     ar4devices.push_back(d);
