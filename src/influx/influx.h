@@ -65,10 +65,17 @@ Point influxCreatePoint(Preferences *prefs, AranetDevice* device, AranetData *da
     point.addTag("device", prefs->getString(PREF_K_SYS_NAME));
     point.addTag("name", device->name);
 
-    if (data->packing == AR4_PACKING_ARANET2) {
+    if (data->type == AranetType::ARANET_RADIATION) {
+        if (data->radiation_duration) {
+            // history wont have this
+            point.addField("duration", data->radiation_duration);
+        }
+        point.addField("radiation", data->radiation_rate / 1000.0);
+        point.addField("radiation_total", data->radiation_total / 1000.0);
+    } else if (data->type == AranetType::ARANET2) {
         point.addField("temperature", data->temperature / 20.0);
         point.addField("humidity", data->humidity / 10.0);
-    } else {
+    } else if (data->type == AranetType::ARANET4) {
         point.addField("co2", data->co2);
         point.addField("temperature", data->temperature / 20.0);
         point.addField("pressure", data->pressure / 10.0);

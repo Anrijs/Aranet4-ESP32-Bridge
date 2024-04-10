@@ -128,6 +128,8 @@ void loop() {
         strManufacturerData.copy((char *)cManufacturerData, cLength, 0);
         memcpy(&manufacturerId, (void*) cManufacturerData, sizeof(manufacturerId));
 
+        uint8_t type = cManufacturerData[2];
+
         bool isMikrotik = manufacturerId == MIKROTIK_MANUFACTURER_ID;
         bool isAirvalent = adv.isAdvertisingService(UUID_Airvalent);
         bool isAranet = adv.isAdvertisingService(UUID_Aranet4);
@@ -162,12 +164,20 @@ void loop() {
                 Serial.println(" Upload failed.");
             }
 
-            registerScannedDevice(&adv, "TG-BT5");
+            if (hasName) {
+                registerScannedDevice(&adv, nullptr);
+            } else {
+                registerScannedDevice(&adv, "TG-BT5");
+            }
             continue;
         }
 
         if (isAirvalent) {
-            registerScannedDevice(&adv, "Airvalent");
+            if (hasName) {
+                registerScannedDevice(&adv, nullptr);
+            } else {
+                registerScannedDevice(&adv, "Airvalent");
+            }
 
             if (d && d->enabled && d->state == STATE_PAIRED && d->gatt) {
                 long expectedUpdateAt = d->updated + ((d->data.interval) * 1000);
@@ -196,7 +206,7 @@ void loop() {
                 Serial.println("[Airvalent] Connected!");
                 AirvalentData data = airv.getCurrentReadings();
 
-                d->data.packing = AR4_PACKING_AIRVALENT;
+                d->data.type = ARANET4; // same as aranet4
                 d->data.co2 = data.co2;
                 d->data.temperature = data.temperature;
                 d->data.humidity = data.humidity;
@@ -265,12 +275,17 @@ void loop() {
 
         if (hasManufacturerData) {
             // read from beacon
-            Serial.print("[Aranet4] Read from beacon data ");
-            Serial.println(d->name);
+            if (cLength == 9 || cLength == 24) {
+                d->data.type = AranetType::ARANET4;
+            } else if (type == 1) {
+                d->data.type = AranetType::ARANET2;
+            } else if (type == 2) {
+                d->data.type = AranetType::ARANET_RADIATION;
+            } else {
+                d->data.type = AranetType::UNKNOWN;
+            }
 
-            d->data.parseFromAdvertisement(cManufacturerData);
-
-            dataOk = true;
+            dataOk = d->data.parseFromAdvertisement(cManufacturerData + 2, d->data.type);
             didRead = true;
         } else if (d->gatt) { // gatt must be enabled to allow reading by cinencting
             // read from gatt
@@ -296,8 +311,6 @@ void loop() {
         }
 
         if (didRead && dataOk) {
-            Serial.printf("  CO2: %i\n  T:  %.2f\n", d->data.co2, d->data.temperature / 20.0);
-
             // Check how many records might have been skipped
             if (d->history) {
                 long mStart = millis();
@@ -391,19 +404,43 @@ int downloadHistory(Aranet4* ar4, AranetDevice* d, int newRecords) {
         cancelWatchdog();
         startWatchdog(max((int) logCount, 30));
 
-        uint8_t params = 0;
-        uint8_t packing = -1;
+        uint16_t params = 0;
+        AranetType type = ar4->getType();
 
-        if (ar4->isAranet4()) {
+        switch (type) {
+        case ARANET4:
             params = AR4_PARAM_FLAGS;
-            packing = AR4_PACKING_ARANET4;
-        } else if (ar4->isAranet2()) {
+            break;
+        case ARANET2:
             params = AR2_PARAM_FLAGS;
-            packing = AR4_PACKING_ARANET2;
+            break;
+        case ARANET_RADIATION:
+            params = ARR_PARAM_FLAGS;
+            params |= AR4_PARAM_RADIATION_PULSES_FLAG;
+        default:
+            params = 0;
+            break;
         }
 
         Serial.printf("Will read %i results from %i @ %i\n", logCount, start, NimBLEDevice::getMTU());
-        ar4->getHistory(start, logCount, logs, params);
+
+        int count = ar4->getHistory(start, logCount, logs, params);
+
+        for (int i=0;i<count;i++) {
+            AranetDataCompact* dc = &logs[i];
+            if (type == ARANET2) {
+                float c = dc->aranet4.temperature / 20.0;
+                Serial.printf("HIST 2 [%u] - %.1f C\n", i, c);
+            } else if (type == ARANET4) {
+                float c = dc->aranet4.temperature / 20.0;
+                Serial.printf("HIST 4 [%u] - %u ppm, %.1f C\n", i, dc->aranet4.co2, c);
+            } else if (type == ARANET_RADIATION) {
+                float sv = dc->aranetr.rad_dose_rate / 100.0;
+                Serial.printf("HIST R [%u] - %.2f uSv/h, %u pulses\n", i, sv, dc->aranetr.rad_pulses);
+            } else {
+                Serial.printf("HIST ? [%u] unkn type: %u\n", i, type);
+            }
+        }
 
         // Sometimes aranet might disconect, before full history is received
         // Set last update time to latest received timestamp;
@@ -426,11 +463,17 @@ int downloadHistory(Aranet4* ar4, AranetDevice* d, int newRecords) {
                 Serial.print(".");
             }
 
-            adata.packing = packing;
-            adata.co2 = logs[k].co2;
-            adata.temperature = logs[k].temperature;
-            adata.pressure = logs[k].pressure;
-            adata.humidity = logs[k].humidity;
+            adata.type = type;
+            if (type == ARANET_RADIATION) {
+                adata.radiation_pulses = logs[k].aranetr.rad_pulses;
+                adata.radiation_rate = logs[k].aranetr.rad_dose_rate;
+                adata.radiation_total = logs[k].aranetr.rad_dose_integral;
+            } else {
+                adata.co2 = logs[k].aranet4.co2;
+                adata.temperature = logs[k].aranet4.temperature;
+                adata.pressure = logs[k].aranet4.pressure;
+                adata.humidity = logs[k].aranet4.humidity;
+            }
 
             Point pt = influxCreatePointWithTimestamp(&prefs, d, &adata, timestamp);
             influxSendPoint(influxClient, pt);

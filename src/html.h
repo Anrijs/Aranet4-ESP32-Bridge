@@ -142,7 +142,31 @@ const char* deviceCard2Html = R"(
                 <div class="cardfl">
                     <img src="/img/humidity.png" alt="Humidity">
                     <br>
-                    <b class="humi-val" style="font-size: 28px;">0</b>%</div>
+                    <b class="humi-val" style="font-size: 28px;">0</b>%
+                </div>
+            </div>
+        </div>
+    </div>
+)";
+
+const char* deviceCard3Html = R"(
+    <div class="card co2-none">
+        <div class="cardtop co2-none"></div>
+        <div class="cardbody">
+            <div>
+                <img src="/img/bluetoothred.png" class="cardimg">
+                <span class="cardtitle">Unknown device</span>
+                <span style="float:right;">
+                    <img class="batt-val" src="/img/battery_10.png" title="0%">
+                </span>
+            </div>
+            <div style="display: flex;">
+                <div class="cardfl">
+                    <img src="/img/radiation.png" alt="Radiation">
+                    <br>
+                    <b class="radrate-val" style="font-size: 28px;">0</b>uSv/h<br>
+                    <span class="radduration-val">0m </span>
+                    <b class="radtotal-val" style="font-size: 20px;">0</b>mSv
                 </div>
             </div>
         </div>
@@ -153,12 +177,24 @@ const char* indexScript = R"(
 <script>
     let template = false;
     let template2 = false;
+    let template3 = false;
 
     function setval(card, name, value) {
         let elems = card.getElementsByClassName(name);
         for (i=0;i<elems.length;i++) {
             elems[i].textContent = value;
         }
+    }
+
+    function seconds2duration(seconds) {
+        let m = Math.floor(seconds / 60 % 60)
+        let h = Math.floor(seconds / 3600 % 24)
+        let d = Math.floor(seconds / 86400)
+
+        let str = m + "m"
+        if (h > 0) str = h + "h " + str
+        if (d > 0) str = d + "d " + str
+        return str;
     }
 
     function updateCards() {
@@ -183,29 +219,42 @@ const char* indexScript = R"(
                 if (!en.includes("e")) continue;
 
                 let devname = pt[2];
-                let packing = pt[4];
+                let type = pt[4];
                 let co2 = pt[5];
                 let temperature = pt[6];
                 let pressure = pt[7];
                 let humidity = pt[8];
-                let batt = pt[9];
-                let interval = pt[10];
-                let age = pt[11];
-                let updat = pt[12];
+                let rad_rate = pt[9];
+                let rad_total = pt[10];
+                let rad_duration = pt[11];
+                let batt = pt[12];
+                let interval = pt[13];
+                let age = pt[14];
+                let updat = pt[15];
+
+                let klass = "co2-none";
 
                 let card = document.createElement('div');
-                if (packing == 1 || packing == 255) {
+                if (type == 0) {
                     card.innerHTML = template;
-                } else {
+                    if (co2 == 0) kalss="co2-none";
+                    else if (co2 < 1000) klass="co2-ok";
+                    else if (co2 < 1400) klass="co2-warn";
+                    else klass = "co2-alert";
+                } else if (type == 1) {
                     card.innerHTML = template2;
+                } else if (type == 2) {
+                    card.innerHTML = template3;
+                    // TODO: fix ranges
+                    if (rad_rate == 0) kalss="co2-none";
+                    else if (rad_rate < 200) klass="co2-ok";
+                    else if (rad_rate < 1000) klass="co2-warn";
+                    else klass = "co2-alert";
+                } else {
+                    card.innerHTML = template;
                 }
-                card = card.firstChild;
 
-                var klass = "co2-none";
-                if (co2 == 0) kalss="co2-none";
-                else if (co2 < 1000) klass="co2-ok";
-                else if (co2 < 1400) klass="co2-warn";
-                else klass = "co2-alert";
+                card = card.firstChild;
 
                 var batimg = "";
 
@@ -235,6 +284,10 @@ const char* indexScript = R"(
                 setval(card, "humi-val",  humidity);
                 setval(card, "pres-val",  pressure);
 
+                setval(card, "radrate-val", rad_rate / 1000.0);
+                setval(card, "radtotal-val", rad_total / 1000000.0);
+                setval(card, "radduration-val",  seconds2duration(rad_duration));
+
                 card.className="card " + klass;
 
                 let u = interval - updat;
@@ -257,9 +310,13 @@ const char* indexScript = R"(
                     .then(response => response.text())
                     .then((dataStr2) => {
                         template2 = dataStr2.trim();
-                        updateCards();
+                        fetch("/devices_template3")
+                            .then(response => response.text())
+                            .then((dataStr3) => {
+                                template3 = dataStr3.trim();
+                                updateCards();
+                            });
                     });
-
             });
     }
 </script>
@@ -319,7 +376,7 @@ const char* devicesScript = R"(
             row.insertCell(1).innerHTML = parts[2];
             row.insertCell(2).innerHTML = parts[3];
             row.insertCell(3).innerHTML = parts[4] / 1000 + 's ago';
-            row.insertCell(4).innerHTML = `<button onclick="addDevice('${parts[1]}');">Add device</button>`;
+            row.insertCell(4).innerHTML = `<button onclick="addDevice('${parts[1]}', '${parts[2]}');">Add device</button>`;
         }
 
         function addSavedDevice(parts) {
@@ -353,8 +410,10 @@ const char* devicesScript = R"(
             row.insertCell(4).innerHTML = utils;
         }
 
-        function addDevice(devicemac) {
-            let name = prompt("device name:");
+        function addDevice(devicemac, defname) {
+            let name = prompt("Device name:", defname);
+            if (!name) return;
+
             fetch("/devices_add", { method: "POST", headers: { "Content-Type": "application/x-www-form-urlencoded" }, body: "devicemac=" + devicemac + "&name=" + name  })
                 .then((response) => response.text())
                 .then((dataStr) => {

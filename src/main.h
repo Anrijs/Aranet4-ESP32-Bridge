@@ -267,7 +267,7 @@ bool getBootWiFiMode() {
 }
 
 String printData() {
-    char buf[64];
+    char buf[100];
     String page = String("");
 
     long tnow = millis();
@@ -280,12 +280,15 @@ String printData() {
         page += String(d->name);
         page += ";" + String(d->addr.toString().c_str()) + ";";
 
-        sprintf(buf, "%u;%i;%.1f;%.1f;%.1f;%i;%i;%i;%i\n",
-                d->data.packing,
+        sprintf(buf, "%u;%i;%.1f;%.1f;%.1f;%lu;%llu;%llu;%i;%i;%i;%i\n",
+                d->data.type,
                 d->data.getCO2(),
                 d->data.getTemperature(),
                 d->data.getPressure(),
                 d->data.getHumidity(),
+                d->data.getRadiationRate(),
+                d->data.getRadiationTotal(),
+                d->data.getRadiationDuration(),
                 d->data.battery,
                 d->data.interval,
                 d->data.ago,
@@ -430,6 +433,17 @@ void onWsEvent(AsyncWebSocket * server, AsyncWebSocketClient * client, AwsEventT
                     // lookup device by mac
                     NimBLEAddress addr(msg.c_str());
                     AranetDevice* d = findSavedDevice(addr);
+                    if (!d) {
+                        uint8_t rev[6];
+                        rev[0] = addr.getNative()[5];
+                        rev[1] = addr.getNative()[4];
+                        rev[2] = addr.getNative()[3];
+                        rev[3] = addr.getNative()[2];
+                        rev[4] = addr.getNative()[1];
+                        rev[5] = addr.getNative()[0];
+                        NimBLEAddress addr2(rev, addr.getType());
+                        d = findSavedDevice(addr);
+                    }
                     if (d && (forcePair || d->state == STATE_NOT_PAIRED)) {
                         Serial.print("Pair device: ");
                         Serial.println(d->name);
@@ -793,6 +807,11 @@ bool startWebserver() {
     server.on("/devices_template2", HTTP_GET, [](AsyncWebServerRequest *request) {
         if (!webAuthenticate(request)) return request->requestAuthentication();
         request->send(200, "text/html", deviceCard2Html);
+    });
+
+    server.on("/devices_template3", HTTP_GET, [](AsyncWebServerRequest *request) {
+        if (!webAuthenticate(request)) return request->requestAuthentication();
+        request->send(200, "text/html", deviceCard3Html);
     });
 
     // Image resources

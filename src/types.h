@@ -5,11 +5,6 @@
 #include "Aranet4.h"
 #include "utils.h"
 
-enum DeviceType {
-    UNKNOWN = 0,
-    ARANET4 = 1
-};
-
 enum PairState {
     STATE_NOT_PAIRED,
     STATE_BEGIN_PAIR,

@@ -70,7 +70,7 @@ void mqttSendPoint(MqttClient* client, Preferences *prefs, AranetDevice* device,
 
     String topic = "aranet4bridge/sensor/" + mqttGetAranetName(device);
 
-    if (data->packing == AR4_PACKING_ARANET2) {
+    if (data->type == AranetType::ARANET2) {
         client->beginMessage(topic + "/temperature");
         client->print(data->temperature / 20.0);
         client->endMessage();
@@ -78,7 +78,7 @@ void mqttSendPoint(MqttClient* client, Preferences *prefs, AranetDevice* device,
         client->beginMessage(topic + "/humidity");
         client->print(data->humidity / 10.0);
         client->endMessage();
-    } else {
+    } else if (data->type == AranetType::ARANET4) {
         client->beginMessage(topic + "/co2");
         client->print(data->co2);
         client->endMessage();
