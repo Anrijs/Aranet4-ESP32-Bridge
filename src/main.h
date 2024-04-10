@@ -880,6 +880,12 @@ bool ntpSync() {
     Serial.println("NTP: sync time");
     configTime(0, 0, prefs.getString(PREF_K_NTP_URL).c_str());
     struct tm timeinfo;
+
+    long timeout = millis() + 10000;
+    while(time(nullptr) <= 100000 && millis() < timeout) {
+        delay(100);
+    }
+
     if (!getLocalTime(&timeinfo)) {
         Serial.printf("NTP: Failed to obtain time (%d)\n",ntpSyncFails);
         return false;
