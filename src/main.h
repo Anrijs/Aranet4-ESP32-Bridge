@@ -786,13 +786,14 @@ bool startWebserver() {
 
         if (request->hasArg("hrs")) {
             int hours = request->arg("hrs").toInt();
-            int minutes = hours * 60;
+            int seconds = hours * 3600;
             int interval = d->data.interval;
             if (interval < 1) {
                 request->send(200, "text/html", "Unknown interval. Can't download.");
                 return;
             } else {
-                sprintf(buf, "Will download %u records (%u hours)...", count, minutes);
+                count = seconds / interval;
+                sprintf(buf, "Will download %u records (%u hours)...", count, hours);
             }
         }
 
