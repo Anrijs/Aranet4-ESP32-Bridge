@@ -478,6 +478,29 @@ void onWsEvent(AsyncWebSocket * server, AsyncWebSocketClient * client, AwsEventT
                     } else {
                         client->text("ERROR:Device not found.");
                     }
+                } else if (cmd == "RENAME") {
+                    int split = -1;
+                    for(size_t i=0; i < msg.length(); i++) {
+                        if (msg.charAt(i) == ';') {
+                            split = i;
+                            break;
+                        }
+                    }
+
+                    String addrstr = msg.substring(0, split);
+                    String newname = msg.substring(split + 1, split + 24);
+
+                    NimBLEAddress addr(addrstr.c_str());
+                    AranetDevice* d = findSavedDevice(addr);
+
+                    if (d) {
+                        strcpy(d->name, newname.c_str());
+                        // save state
+                        devicesSave();
+                        client->text("RENAME:OK");
+                    } else {
+                        client->text("ERROR:Device not found.");
+                    }
                 }
             }
         } else {

@@ -389,9 +389,12 @@ const char* devicesScript = R"(
             // Enabled	Address   Name	RSSI	Last seen   []
             let row = savedDevices.insertRow();
 
-            row.insertCell(0).innerHTML = parts[1];
-            row.insertCell(1).innerHTML = parts[2];
-            row.insertCell(2).innerHTML = parts[3];
+            let nameRow = parts[2];
+            nameRow += ` <small onclick="renameDevice('${parts[1]}', '${parts[2]}');">&#9999;&#65039</button>`;
+
+            row.insertCell(0).innerHTML = parts[1]; // address
+            row.insertCell(1).innerHTML = nameRow;  // name
+            row.insertCell(2).innerHTML = parts[3]; // rssi
             row.insertCell(3).innerHTML = parts[4] / 1000 + 's ago';
 
 
@@ -500,6 +503,12 @@ const char* devicesScript = R"(
             let cmd = "PAIR_BEGIN";
             if (force) cmd += "_FORCE";
             socket.send(cmd + ":" + devicemac);
+        }
+
+        function renameDevice(devicemac, defname) {
+            let name = prompt("Device name:", defname);
+            if (!name) return;
+            socket.send("RENAME:" + devicemac + ";" + name);
         }
 
         let refreshTimeout = setTimeout(fetchResults, 100);
