@@ -263,7 +263,9 @@ bool processAdvertisement(NimBLEAdvertisedDevice* adv, AranetDevice* d) {
 
     bool isMikrotik = manufacturerId == MIKROTIK_MANUFACTURER_ID;
     bool isAirvalent = adv->isAdvertisingService(UUID_Airvalent);
-    bool isAranet = adv->isAdvertisingService(UUID_Aranet4) || manufacturerId == ARANET4_MANUFACTURER_ID;
+    bool isAranet = adv->isAdvertisingService(UUID_Aranet4)
+        || manufacturerId == ARANET4_MANUFACTURER_ID
+        || adv->getName().find("Aranet") != std::string::npos;
     bool hasName = !adv->getName().empty();
     bool prcessed = false;
 
@@ -353,7 +355,7 @@ void loop() {
         NimBLEAdvertisedDevice adv = results.getDevice(i);
         AranetDevice* d = findSavedDevice(&adv);
 
-        if (!d || !d->enabled)continue;
+        if (!d || !d->enabled) continue;
 
         if (processAdvertisement(&adv, d)) {
             Serial.printf("[SCAN] Processed %s\n", d->name);
