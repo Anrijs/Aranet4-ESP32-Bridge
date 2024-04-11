@@ -77,19 +77,21 @@ bool processAranet(AranetDevice* d, NimBLEAdvertisedDevice* adv, uint8_t* cManuf
     bool readHistory = d->history && d->pending > 0;
 
     if (d->history && d->pending) {
-        long mStart = millis();
-        int newRecords = d->pending;
-        if (newRecords == 0) newRecords = (((mStart - d->updated) / 1000) / d->data.interval) - 1;
+        if (ntpOk) {
+            long mStart = millis();
+            int newRecords = d->pending;
+            if (newRecords == 0) newRecords = (((mStart - d->updated) / 1000) / d->data.interval) - 1;
 
-        if (d->updated != 0 && newRecords > 0) {
-            Serial.printf("I see missed %i records\n", newRecords);
-
-            int result = downloadHistory(&ar4, d, newRecords);
-            if (result >= 0) {
-                Serial.printf("Dwonlaoded %d logs\n", result);
-            } else {
-                Serial.println("Couldn't read history");
+            if (d->updated != 0 && newRecords > 0) {
+                int result = downloadHistory(&ar4, d, newRecords);
+                if (result >= 0) {
+                    Serial.printf("[HIST] Dwonlaoded %d logs\n", result);
+                } else {
+                    Serial.println("[HIST] Couldn't read history");
+                }
             }
+        } else {
+            Serial.println("[HIST] NTP Not synced.");
         }
     }
 
@@ -429,7 +431,7 @@ int downloadHistory(Aranet4* ar4, AranetDevice* d, int newRecords) {
             break;
         }
 
-        Serial.printf("Will read %i results from %i @ %i\n", logCount, start, NimBLEDevice::getMTU());
+        Serial.printf("[HIST] Read %i results from %i..%i\n", logCount, start, start + logCount);
 
         int count = ar4->getHistory(start, logCount, logs, params);
 
@@ -437,15 +439,10 @@ int downloadHistory(Aranet4* ar4, AranetDevice* d, int newRecords) {
             AranetDataCompact* dc = &logs[i];
             if (type == ARANET2) {
                 float c = dc->aranet4.temperature / 20.0;
-                Serial.printf("HIST 2 [%u] - %.1f C\n", i, c);
             } else if (type == ARANET4) {
                 float c = dc->aranet4.temperature / 20.0;
-                Serial.printf("HIST 4 [%u] - %u ppm, %.1f C\n", i, dc->aranet4.co2, c);
             } else if (type == ARANET_RADIATION) {
                 float sv = dc->aranetr.rad_dose_rate / 100.0;
-                Serial.printf("HIST R [%u] - %.2f uSv/h, %u pulses\n", i, sv, dc->aranetr.rad_pulses);
-            } else {
-                Serial.printf("HIST ? [%u] unkn type: %u\n", i, type);
             }
         }
 
@@ -459,7 +456,7 @@ int downloadHistory(Aranet4* ar4, AranetDevice* d, int newRecords) {
             d->pending = newRecords;
         }
 
-        Serial.printf("Sending %i logs. %i remm\n", logCount, newRecords);
+        Serial.printf("[HIST] Sending %i logs, %i remaining\n", logCount, newRecords);
 
         result += logCount;
 
