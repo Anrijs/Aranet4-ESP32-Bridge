@@ -70,6 +70,7 @@ long wifiConnectedAt = 0;
 long ntpSyncTime = 0;
 uint8_t ntpSyncFails = 0;
 bool spiffsOk = false;
+bool ntpOk = false;
 
 static WireGuard wg;
 
@@ -878,18 +879,21 @@ void startNtpSyncTask() {
 
 bool ntpSync() {
     Serial.println("NTP: sync time");
-    configTime(0, 0, prefs.getString(PREF_K_NTP_URL).c_str());
+    String ntpUrl = prefs.getString(PREF_K_NTP_URL);
+    configTime(0, 0, ntpUrl.c_str());
     struct tm timeinfo;
 
-    long timeout = millis() + 10000;
-    while(time(nullptr) <= 100000 && millis() < timeout) {
+    uint8_t loops = 0;
+    while(time(nullptr) <= 100000 && loops++ < 100) {
+        long ti = time(nullptr);
         delay(100);
     }
 
     if (!getLocalTime(&timeinfo)) {
-        Serial.printf("NTP: Failed to obtain time (%d)\n",ntpSyncFails);
+        Serial.printf("NTP: Failed to obtain time (%d)\n", ntpSyncFails);
         return false;
     }
+    ntpOk = true;
     Serial.println(&timeinfo, "NTP: %A, %B %d %Y %H:%M:%S");
     return true;
 }
@@ -897,7 +901,10 @@ bool ntpSync() {
 void NtpSyncTaskCode(void * pvParameters) {
     for (;;) {
         if (millis() > ntpSyncTime) {
-            if (ntpSync()) {
+            if (WiFi.status() != WL_CONNECTED) {
+                task_sleep(10000);
+                continue;
+            } else if (ntpSync()) {
                 ntpSyncTime = millis() + (CFG_NTP_SYNC_INTERVAL * 60000);
                 ntpSyncFails = 0;
             } else {
