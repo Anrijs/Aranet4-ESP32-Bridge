@@ -113,7 +113,7 @@ bool processAranet(AranetDevice* d, NimBLEAdvertisedDevice* adv, uint8_t* cManuf
             d->data.type = AranetType::UNKNOWN;
         }
 
-        dataOk = d->data.parseFromAdvertisement(cManufacturerData + 2, d->data.type);
+        dataOk = d->data.parseFromAdvertisement(cManufacturerData + 2, cLength - 2, d->data.type);
     }
 
     if (readCurrent && !dataOk && d->gatt) { // gatt must be enabled to allow reading by cinencting
@@ -274,36 +274,23 @@ bool processAdvertisement(NimBLEAdvertisedDevice* adv, AranetDevice* d) {
         || adv->getName().find("Aranet") != std::string::npos;
     bool hasName = !adv->getName().empty();
     bool prcessed = false;
-
-    if (isMikrotik) {
-        if (hasName) {
-            registerScannedDevice(adv, nullptr);
-        } else {
-            registerScannedDevice(adv, defname_mikrotik);
-        }
-
-        prcessed = processMikrotik(d, adv, cManufacturerData, cLength);
-    }
-
-    if (isAirvalent) {
-        if (hasName) {
-            registerScannedDevice(adv, nullptr);
-        } else {
-            registerScannedDevice(adv, defname_airvalent);
-        }
-        prcessed =  processAirvalent(d, adv, cManufacturerData, cLength);
-    }
+    const char* defname = nullptr;
 
     if (isAranet) {
-        if (hasName) {
-            registerScannedDevice(adv, nullptr);
-        } else {
-            registerScannedDevice(adv, defname_aranet);
-        }
+        defname = defname_aranet;
         prcessed = processAranet(d, adv, cManufacturerData, cLength);
+    } else if (isMikrotik) {
+        defname = defname_mikrotik;
+        prcessed = processMikrotik(d, adv, cManufacturerData, cLength);
+    } else if (isAirvalent) {
+        defname = defname_airvalent;
+        prcessed =  processAirvalent(d, adv, cManufacturerData, cLength);
+    } else {
+        return false;
     }
 
-    cancelWatchdog();
+    if (hasName) defname = nullptr;
+    registerScannedDevice(adv, defname);
 
     return prcessed;
 }
