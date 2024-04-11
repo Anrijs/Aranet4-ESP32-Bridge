@@ -99,8 +99,6 @@ bool processAranet(AranetDevice* d, NimBLEAdvertisedDevice* adv, uint8_t* cManuf
         }
     }
 
-    if (!readCurrent) return false;
-
     if (hasManufacturerData) {
         // read from beacon
         if (cLength == 9 || cLength == 24) {
@@ -113,8 +111,12 @@ bool processAranet(AranetDevice* d, NimBLEAdvertisedDevice* adv, uint8_t* cManuf
             d->data.type = AranetType::UNKNOWN;
         }
 
+        uint8_t counter = d->data.counter;
         dataOk = d->data.parseFromAdvertisement(cManufacturerData + 2, cLength - 2, d->data.type);
+        if (dataOk) readCurrent = counter != d->data.counter;
     }
+
+    if (!readCurrent) return false;
 
     if (readCurrent && !dataOk && d->gatt) { // gatt must be enabled to allow reading by cinencting
         startWatchdog(30);
