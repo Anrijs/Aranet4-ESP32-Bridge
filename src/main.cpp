@@ -12,6 +12,10 @@
 #include "esp_task_wdt.h"
 #include "MikroTikBT5.h"
 
+const char* defname_aranet = "Aranet";
+const char* defname_airvalent = "Airvalent";
+const char* defname_mikrotik = "TG-BT5";
+
 long nextReport = 0;
 
 int downloadHistory(Aranet4* ar4, AranetDevice* d, int newRecords);
@@ -40,8 +44,8 @@ void setup() {
 
     createInfluxClient();
 
-    char* rstReason0 = getResetReason(rtc_get_reset_reason(0));
-    char* rstReason1 = getResetReason(rtc_get_reset_reason(1));
+    const char* rstReason0 = getResetReason(rtc_get_reset_reason(0));
+    const char* rstReason1 = getResetReason(rtc_get_reset_reason(1));
 
     String resetMsg = String("CPU0: ") + String(rstReason0) + String(", CPU1: ") + String(rstReason1);
     log(resetMsg, ILog::INFO);
@@ -275,7 +279,7 @@ bool processAdvertisement(NimBLEAdvertisedDevice* adv, AranetDevice* d) {
         if (hasName) {
             registerScannedDevice(adv, nullptr);
         } else {
-            registerScannedDevice(adv, "TG-BT5");
+            registerScannedDevice(adv, defname_mikrotik);
         }
 
         prcessed = processMikrotik(d, adv, cManufacturerData, cLength);
@@ -285,7 +289,7 @@ bool processAdvertisement(NimBLEAdvertisedDevice* adv, AranetDevice* d) {
         if (hasName) {
             registerScannedDevice(adv, nullptr);
         } else {
-            registerScannedDevice(adv, "Airvalent");
+            registerScannedDevice(adv, defname_airvalent);
         }
         prcessed =  processAirvalent(d, adv, cManufacturerData, cLength);
     }
@@ -294,7 +298,7 @@ bool processAdvertisement(NimBLEAdvertisedDevice* adv, AranetDevice* d) {
         if (hasName) {
             registerScannedDevice(adv, nullptr);
         } else {
-            registerScannedDevice(adv, "Aranet");
+            registerScannedDevice(adv, defname_aranet);
         }
         prcessed = processAranet(d, adv, cManufacturerData, cLength);
     }

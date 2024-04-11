@@ -66,7 +66,7 @@ const char* cfgScript =
     "let div = document.getElementById(\"ipcfg\");"
     "div.style.display = en ? \"block\" : \"none\";"
     "}"
-    "let staticIpCb = document.getElementsByName(\""PREF_K_WIFI_IP_STATIC"\")[0];"
+    "let staticIpCb = document.getElementsByName(\"" PREF_K_WIFI_IP_STATIC "\")[0];"
     "staticIpCb.onchange = function(e) {"
     "toggleStaticCfg(e.target.checked);"
     "};"
@@ -515,25 +515,25 @@ const char* devicesScript = R"(
             </script>
 )";
 
-String printHtmlLabel(char *name, char* title) {
+String printHtmlLabel(const char *name, const char* title) {
     char tmp[128];
     sprintf(tmp, "<label for=\"%s\">%s</label>",name,title);
     return String(tmp);
 }
 
-String printHtmlTextInput(char *name, char* title, String value, uint8_t maxlen) {
+String printHtmlTextInput(const char *name, const char* title, String value, uint8_t maxlen) {
     char tmp[256];
     sprintf(tmp, "<br><input type=\"text\" name=\"%s\" maxlength=\"%i\" value=\"%s\"></br>", name, maxlen, value.c_str());
     return printHtmlLabel(name, title) + String(tmp);
 }
 
-String printHtmlNumberInput(char *name, char* title, uint16_t value, uint32_t max) {
+String printHtmlNumberInput(const char *name, const char* title, uint16_t value, uint32_t max) {
     char tmp[256];
     sprintf(tmp, "<br><input type=\"number\" name=\"%s\" max=\"%i\" value=\"%i\"></br>", name, max, value);
     return printHtmlLabel(name, title) + String(tmp);
 }
 
-String printHtmlCheckboxInput(char *name, char* title, uint32_t value) {
+String printHtmlCheckboxInput(const char *name, const char* title, uint32_t value) {
     char tmp[256];
     sprintf(tmp, "<input type=\"checkbox\" name=\"%s\" %s>", name, value ? "checked" : "");
     return String(tmp) + printHtmlLabel(name, title) + String("<br>");

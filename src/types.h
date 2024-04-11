@@ -12,7 +12,7 @@ enum PairState {
     STATE_PAIRED
 };
 
-typedef struct AranetDevice { 
+typedef struct { 
     NimBLEAddress addr;
     char name[24];
 
@@ -79,6 +79,6 @@ typedef struct AranetDevice {
 
         return page;
     }
-};
+} AranetDevice;
 
 #endif

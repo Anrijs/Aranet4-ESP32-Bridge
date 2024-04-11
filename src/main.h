@@ -976,7 +976,7 @@ void log(String msg, ILog level) {
     influxSendLog(influxClient, &prefs, msg, level);
 }
 
-char* rst_reasons[] = {
+const char* rst_reasons[] = {
     "POWERON_RESET",          /**<1, Vbat power on reset*/
     "SW_RESET",               /**<3, Software reset digital core*/
     "OWDT_RESET",             /**<4, Legacy watch dog reset digital core*/
@@ -995,7 +995,7 @@ char* rst_reasons[] = {
     "NO_MEAN"
 };
 
-char* getResetReason(RESET_REASON reason) {
+const char* getResetReason(RESET_REASON reason) {
     switch (reason) {
         case 1 : return rst_reasons[0];   /**<1, Vbat power on reset*/
         case 3 : return rst_reasons[1];   /**<3, Software reset digital core*/
@@ -1041,7 +1041,7 @@ AranetDevice* findSavedDevice(NimBLEAdvertisedDevice* adv) {
     return findSavedDevice(adv->getAddress());
 }
 
-void registerScannedDevice(NimBLEAdvertisedDevice* adv, char* name) {
+void registerScannedDevice(NimBLEAdvertisedDevice* adv, const char* name) {
     // find existing
     NimBLEAddress umac = adv->getAddress();
     int rssi = adv->getRSSI();
