@@ -381,6 +381,7 @@ int downloadHistory(Aranet4* ar4, AranetDevice* d, int newRecords) {
     adata.ago = 0;
     adata.battery = d->data.battery;
     adata.interval = d->data.interval;
+    adata.type = d->data.type;
 
     // if info was received from beacon, ar4 will be disconencted
     if (!ar4->isConnected()) {
@@ -419,25 +420,15 @@ int downloadHistory(Aranet4* ar4, AranetDevice* d, int newRecords) {
         case ARANET_RADIATION:
             params = ARR_PARAM_FLAGS;
             params |= AR4_PARAM_RADIATION_PULSES_FLAG;
+            break;
         default:
             params = 0;
             break;
         }
 
-        Serial.printf("[HIST] Read %i results from %i..%i\n", logCount, start, start + logCount);
+        Serial.printf("[HIST] Read params %i results from %i..%i [%u]\n", logCount, start, start + logCount, params);
 
         int count = ar4->getHistory(start, logCount, logs, params);
-
-        for (int i=0;i<count;i++) {
-            AranetDataCompact* dc = &logs[i];
-            if (type == ARANET2) {
-                float c = dc->aranet4.temperature / 20.0;
-            } else if (type == ARANET4) {
-                float c = dc->aranet4.temperature / 20.0;
-            } else if (type == ARANET_RADIATION) {
-                float sv = dc->aranetr.rad_dose_rate / 100.0;
-            }
-        }
 
         // Sometimes aranet might disconect, before full history is received
         // Set last update time to latest received timestamp;
@@ -463,7 +454,7 @@ int downloadHistory(Aranet4* ar4, AranetDevice* d, int newRecords) {
             adata.type = type;
             if (type == ARANET_RADIATION) {
                 adata.radiation_pulses = logs[k].aranetr.rad_pulses;
-                adata.radiation_rate = logs[k].aranetr.rad_dose_rate;
+                adata.radiation_rate = logs[k].aranetr.rad_dose_rate * 10;
                 adata.radiation_total = logs[k].aranetr.rad_dose_integral;
             } else {
                 adata.co2 = logs[k].aranet4.co2;
