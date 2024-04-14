@@ -280,13 +280,13 @@ bool processAdvertisement(NimBLEAdvertisedDevice* adv, AranetDevice* d) {
 
     if (isAranet) {
         defname = defname_aranet;
-        prcessed = processAranet(d, adv, cManufacturerData, cLength);
+        prcessed = d && d->enabled && processAranet(d, adv, cManufacturerData, cLength);
     } else if (isMikrotik) {
         defname = defname_mikrotik;
-        prcessed = processMikrotik(d, adv, cManufacturerData, cLength);
+        prcessed = d && d->enabled && processMikrotik(d, adv, cManufacturerData, cLength);
     } else if (isAirvalent) {
         defname = defname_airvalent;
-        prcessed =  processAirvalent(d, adv, cManufacturerData, cLength);
+        prcessed =  d && d->enabled && processAirvalent(d, adv, cManufacturerData, cLength);
     } else {
         return false;
     }
@@ -349,9 +349,6 @@ void loop() {
     for (int i = 0; i < results.getCount(); i++) {
         NimBLEAdvertisedDevice adv = results.getDevice(i);
         AranetDevice* d = findSavedDevice(&adv);
-
-        if (!d || !d->enabled) continue;
-
         if (processAdvertisement(&adv, d)) {
             Serial.printf("[SCAN] Processed %s\n", d->name);
         }
